@@ -300,11 +300,14 @@ final class GameState {
         guard activeLevelNumber == 1, !tutorialSeen else { return }
 
         // Guided taps on the real Level 1 board. The first two place harmless
-        // X marks; the final one closes row 1 onto its safety and triggers the
-        // reveal through the normal engine path.
+        // X marks; the third teaches the no-touch deduction from the revealed
+        // linebacker (the player must X that neighbor themselves); the final
+        // one closes row 1 onto its safety and triggers the reveal through the
+        // normal engine path. Every X is placed by the player's own tap.
         guideSteps = [
             GuideStep(cellId: PuzzleEngine.cellId(row: 4, column: 4), message: "TAP THIS SQUARE TO BLOCK IT."),
             GuideStep(cellId: PuzzleEngine.cellId(row: 1, column: 0), message: "GOOD. THIS SPACE CAN'T HOLD A DEFENDER EITHER."),
+            GuideStep(cellId: PuzzleEngine.cellId(row: 1, column: 2), message: "A DEFENDER IS ALREADY ON THE FIELD. DEFENDERS CAN'T TOUCH. TAP HERE TO BLOCK IT."),
             GuideStep(cellId: PuzzleEngine.cellId(row: 1, column: 4), message: "ONE MORE. TAP THIS SQUARE TO BLOCK IT."),
         ]
         guideCellId = guideSteps[0].cellId

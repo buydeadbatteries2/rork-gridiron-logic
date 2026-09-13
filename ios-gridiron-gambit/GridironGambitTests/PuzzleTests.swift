@@ -197,6 +197,43 @@ final class PuzzleTests: XCTestCase {
         XCTAssertEqual(forced?.kind, "cb")
     }
 
+    /// A revealed defender is INFORMATION ONLY: the engine must not credit its
+    /// row, column, or neighbors as blocked. The reveal waits until the player
+    /// has personally X'd every other square in the line.
+    func testRevealWaitsForPlayerToMarkRevealedDefendersNeighbors() {
+        let puzzle = makeTestPuzzle()
+        // Linebacker revealed at (2,4). Its diagonal neighbors (1,3)/(1,4) and
+        // the rest of its row/column must stay OPEN until the player X's them.
+        let revealed = ["cell-2-4": "lb"]
+
+        // Row 1 hides the safety at (1,2). The player X'd (1,0) — but (1,1) and
+        // (1,4) are still open on the board, so nothing may reveal yet, even
+        // though the engine internally knows (1,3)/(1,4) are impossible.
+        XCTAssertNil(
+            PuzzleEngine.forcedReveal(puzzle, revealed: revealed, marks: ["cell-1-0"]),
+            "Reveal fired from internal knowledge — the player hasn't finished the elimination"
+        )
+        XCTAssertNil(
+            PuzzleEngine.forcedReveal(puzzle, revealed: revealed, marks: ["cell-1-0", "cell-1-1"]),
+            "Still one open square left for the player to block"
+        )
+
+        // The revealed defender's own row never reveals again, no matter what.
+        XCTAssertNil(
+            PuzzleEngine.forcedReveal(puzzle, revealed: revealed, marks: ["cell-2-0", "cell-2-1", "cell-2-2", "cell-2-3"]),
+            "A line with a revealed defender cannot reveal a second one"
+        )
+
+        // Now the player closes row 1 personally → the safety reveals.
+        let forced = PuzzleEngine.forcedReveal(
+            puzzle,
+            revealed: revealed,
+            marks: ["cell-1-0", "cell-1-1", "cell-1-4"]
+        )
+        XCTAssertEqual(forced?.cell, "cell-1-2")
+        XCTAssertEqual(forced?.kind, "s")
+    }
+
     func testNoRevealWhenRemainingCellIsNotTheSolution() {
         // Row 0: player X'd the real solution cell, leaving cell-0-1 open.
         let blocked: Set<String> = Set((2...4).map { PuzzleEngine.cellId(row: 0, column: $0) })

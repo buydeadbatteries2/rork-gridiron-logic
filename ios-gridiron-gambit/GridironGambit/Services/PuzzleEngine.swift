@@ -77,18 +77,26 @@ nonisolated enum PuzzleEngine {
 
     /// The single reveal check, run after every player action. Returns at most
     /// one reveal: the first row or column (reading order) where the player's
-    /// deductions leave exactly one open cell AND that cell is the stored
-    /// solution AND at least one of the player's own X marks sits in that line.
+    /// OWN marks and the puzzle's starting clues leave exactly one open cell,
+    /// that cell is the stored solution, and at least one of the player's own
+    /// X marks sits in that line.
+    ///
+    /// Revealed defenders are INFORMATION ONLY here: the engine does not credit
+    /// their rows, columns, or neighbors as blocked. The player must personally
+    /// X those squares before a line can close — internal knowledge about the
+    /// geometry of revealed defenders never triggers a reveal by itself.
     ///
     /// The engagement requirement keeps pre-blocked lines (closed purely by
-    /// starting clues or revealed defenders) from revealing without the player
-    /// demonstrating the deduction themselves.
+    /// starting clues) from revealing without the player demonstrating the
+    /// deduction themselves.
     static func forcedReveal(
         _ puzzle: PuzzleDefinition,
         revealed: [String: String],
         marks: Set<String>
     ) -> (cell: String, kind: String)? {
-        let blocked = impossibleCells(puzzle, revealed: revealed).union(marks)
+        // Only what the player can SEE as blocked counts: starting clues and
+        // the player's own X marks. Nothing derived from revealed defenders.
+        let blocked = puzzle.startingX.union(marks)
         let size = puzzle.gridSize
 
         let lines: [[String]] =
@@ -109,6 +117,12 @@ nonisolated enum PuzzleEngine {
 
     /// True when a player X mark sits on a hidden defender, making some row or
     /// column impossible to satisfy. The player is never told WHICH mark is wrong.
+    ///
+    /// Unlike the reveal check, this MAY use the geometry of revealed defenders:
+    /// if the remaining open cells of a line are all provably impossible (shared
+    /// row, column, or neighborhood with a revealed defender), then any player
+    /// mark covering the line's last viable cell is a genuine contradiction.
+    /// When this returns true, a player mark is always sitting on a defender.
     static func hasContradiction(
         _ puzzle: PuzzleDefinition,
         revealed: [String: String],
@@ -131,8 +145,9 @@ nonisolated enum PuzzleEngine {
 
     /// The hint's target: ONE square the player can logically X. Prefers a mark
     /// that completes a reveal, then any provably-empty square tied to a revealed
-    /// defender, then any provably-empty square. The hint only highlights — the
-    /// player still places the X themselves.
+    /// defender (its row, column, or neighbors — deductions the player should
+    /// make themselves). The hint only highlights — the player still places the
+    /// X themselves, and the reveal only comes once their marks close a line.
     static func hintXCell(
         _ puzzle: PuzzleDefinition,
         revealed: [String: String],
