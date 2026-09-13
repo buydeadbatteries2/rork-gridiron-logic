@@ -3,8 +3,9 @@ import SwiftUI
 /// The 15 handcrafted Stadium 1 puzzles. The offensive play above the grid
 /// carries the theme; the hidden defense is a 5x5 logic grid solved with three
 /// universal rules — one defender per row, one per column, defenders never
-/// touch. Every puzzle is machine-verified to have exactly one solution
-/// (tools/verify_puzzles.py).
+/// touch. Boards start CLEAN: no pre-filled X marks, only revealed defenders
+/// as visible clues. Every puzzle is machine-verified to have exactly one
+/// solution from those visible clues (tools/verify_puzzles.py).
 nonisolated enum Puzzles {
 
     /// Zone geometry used to draw routes into the defensive half of the field.
@@ -58,13 +59,6 @@ nonisolated enum Puzzles {
                 "....L",
                 "..C..",
             ],
-            startX: [
-                ".XXX.",
-                ".X...",
-                "X..XX",
-                "XXX..",
-                ".X.X.",
-            ],
             startRevealed: [(2, 1)],
             routes: [
                 routeInto("r1", .vertical, from: 0.93, to: (0, 3), on: .a, crossBy: -0.04),
@@ -85,14 +79,7 @@ nonisolated enum Puzzles {
                 "...L.",
                 ".C...",
             ],
-            startX: [
-                "XX.XX",
-                "XX...",
-                ".XXX.",
-                "X....",
-                "X..XX",
-            ],
-            startRevealed: [(2, 0)],
+            startRevealed: [(0, 2), (1, 4), (2, 0), (3, 3)],
             routes: [
                 routeInto("r1", .crossing, from: 0.90, to: (0, 1), on: .a, crossBy: -0.28),
                 routeInto("r2", .vertical, from: 0.72, to: (0, 3), on: .a, crossBy: 0.10),
@@ -113,13 +100,7 @@ nonisolated enum Puzzles {
                 "..L..",
                 "....C",
             ],
-            startX: [
-                "X.XXX",
-                "X.X.X",
-                "..XX.",
-                "....X",
-                "..XX.",
-            ],
+            startRevealed: [(0, 1), (1, 3), (2, 0), (3, 2)],
             routes: [
                 routeInto("r1", .vertical, from: 0.95, to: (0, 0), on: .a, crossBy: -0.06),
                 routeInto("r2", .crossing, from: 0.22, to: (0, 2), on: .a, crossBy: 0.22),
@@ -139,13 +120,7 @@ nonisolated enum Puzzles {
                 ".L...",
                 "...C.",
             ],
-            startX: [
-                "X..XX",
-                "....X",
-                "XXXX.",
-                "X.X..",
-                "....X",
-            ],
+            startRevealed: [(0, 2), (1, 0), (2, 4)],
             routes: [
                 routeInto("r1", .crossing, from: 0.84, to: (0, 1), on: .a, crossBy: -0.26),
                 routeInto("r2", .vertical, from: 0.94, to: (0, 2), on: .a, crossBy: -0.06),
@@ -165,13 +140,7 @@ nonisolated enum Puzzles {
                 "...L.",
                 ".C...",
             ],
-            startX: [
-                ".XXX.",
-                "X..XX",
-                ".XX.X",
-                ".X...",
-                "..X..",
-            ],
+            startRevealed: [(0, 4), (1, 2), (2, 0)],
             routes: [
                 routeInto("r1", .crossing, from: 0.09, to: (0, 1), on: .a, crossBy: 0.20),
                 routeInto("r2", .crossing, from: 0.70, to: (1, 1), on: .a, crossBy: -0.16),
@@ -191,13 +160,7 @@ nonisolated enum Puzzles {
                 "..L..",
                 "C....",
             ],
-            startX: [
-                "X.X..",
-                "X..X.",
-                "XX.X.",
-                "XX..X",
-                ".....",
-            ],
+            startRevealed: [(0, 3), (1, 1), (3, 2)],
             routes: [
                 routeInto("r1", .crossing, from: 0.86, to: (0, 2), on: .a, crossBy: -0.14),
                 routeInto("r2", .vertical, from: 0.68, to: (1, 2), on: .a, crossBy: -0.02),
@@ -217,13 +180,7 @@ nonisolated enum Puzzles {
                 "....L",
                 ".C...",
             ],
-            startX: [
-                "..X..",
-                "...X.",
-                "XX..X",
-                "X..X.",
-                "X..X.",
-            ],
+            startRevealed: [(0, 3), (1, 0), (2, 2)],
             routes: [
                 routeInto("r1", .crossing, from: 0.09, to: (0, 0), on: .a, crossBy: 0.04),
                 routeInto("r2", .vertical, from: 0.10, to: (1, 0), on: .a, crossBy: 0.03),
@@ -243,13 +200,7 @@ nonisolated enum Puzzles {
                 "....L",
                 "..C..",
             ],
-            startX: [
-                "X.X.X",
-                ".....",
-                ".XX.X",
-                "..X..",
-                ".X..X",
-            ],
+            startRevealed: [(0, 1), (1, 3), (3, 4)],
             routes: [
                 routeInto("r1", .vertical, from: 0.09, to: (0, 1), on: .a, crossBy: 0.12),
                 routeInto("r2", .vertical, from: 0.95, to: (0, 3), on: .a, crossBy: -0.06),
@@ -271,13 +222,7 @@ nonisolated enum Puzzles {
                 ".L...",
                 "....C",
             ],
-            startX: [
-                ".X...",
-                ".XX.X",
-                "....X",
-                "...X.",
-                ".XX..",
-            ],
+            startRevealed: [(0, 2), (2, 3)],
             routes: [
                 routeInto("r1", .crossing, from: 0.90, to: (0, 3), on: .c, crossBy: -0.20),
                 routeInto("r2", .crossing, from: 0.68, to: (1, 3), on: .c, crossBy: -0.08),
@@ -297,13 +242,7 @@ nonisolated enum Puzzles {
                 "..L..",
                 "C....",
             ],
-            startX: [
-                "X...X",
-                "X....",
-                "X..X.",
-                "XX.X.",
-                ".....",
-            ],
+            startRevealed: [(0, 3), (3, 2)],
             routes: [
                 routeInto("r1", .crossing, from: 0.32, to: (0, 1), on: .c, crossBy: 0.08),
                 routeInto("r2", .vertical, from: 0.50, to: (1, 1), on: .c, crossBy: 0.02),
@@ -323,13 +262,7 @@ nonisolated enum Puzzles {
                 ".L...",
                 "....C",
             ],
-            startX: [
-                ".X...",
-                ".....",
-                "X...X",
-                "...X.",
-                "XXX..",
-            ],
+            startRevealed: [(0, 2), (2, 3)],
             routes: [
                 routeInto("r1", .crossing, from: 0.09, to: (0, 0), on: .c, crossBy: 0.04),
                 routeInto("r2", .vertical, from: 0.10, to: (1, 0), on: .c, crossBy: 0.02),
@@ -349,13 +282,7 @@ nonisolated enum Puzzles {
                 "....L",
                 "..C..",
             ],
-            startX: [
-                "....X",
-                "X...X",
-                ".X..X",
-                ".XX..",
-                ".....",
-            ],
+            startRevealed: [(0, 1), (3, 4)],
             routes: [
                 routeInto("r1", .crossing, from: 0.18, to: (0, 1), on: .c, crossBy: 0.08),
                 routeInto("r2", .crossing, from: 0.90, to: (1, 1), on: .c, crossBy: -0.24),
@@ -375,13 +302,7 @@ nonisolated enum Puzzles {
                 ".L...",
                 "....C",
             ],
-            startX: [
-                ".....",
-                "....X",
-                "X.X.X",
-                ".....",
-                "..XX.",
-            ],
+            startRevealed: [(0, 2), (2, 3)],
             routes: [
                 routeInto("r1", .crossing, from: 0.20, to: (0, 1), on: .c, crossBy: 0.08),
                 routeInto("r2", .crossing, from: 0.90, to: (1, 1), on: .c, crossBy: -0.24),
@@ -401,13 +322,7 @@ nonisolated enum Puzzles {
                 "...L.",
                 "C....",
             ],
-            startX: [
-                "...X.",
-                ".....",
-                "X.X.X",
-                ".....",
-                "..X.X",
-            ],
+            startRevealed: [(0, 2), (2, 1)],
             routes: [
                 routeInto("r1", .crossing, from: 0.16, to: (0, 1), on: .c, crossBy: 0.06),
                 routeInto("r2", .vertical, from: 0.08, to: (1, 0), on: .c, crossBy: 0.02),
@@ -427,13 +342,7 @@ nonisolated enum Puzzles {
                 "L....",
                 "..C..",
             ],
-            startX: [
-                ".....",
-                "X....",
-                "XX..X",
-                ".....",
-                "...X.",
-            ],
+            startRevealed: [(0, 4), (1, 1)],
             routes: [
                 routeInto("r1", .crossing, from: 0.15, to: (0, 1), on: .c, crossBy: 0.06),
                 routeInto("r2", .crossing, from: 0.72, to: (1, 1), on: .c, crossBy: -0.14),
@@ -454,7 +363,6 @@ nonisolated enum Puzzles {
         playName: String,
         formation: [OffensiveMarker],
         solution: [String],
-        startX: [String],
         startRevealed: [(Int, Int)] = [],
         routes: [OffensiveRoute]
     ) -> PuzzleDefinition {
@@ -473,13 +381,6 @@ nonisolated enum Puzzles {
                 if let kind = kindID(character) {
                     solutionCells[PuzzleEngine.cellId(row: row, column: column)] = kind
                 }
-            }
-        }
-
-        var xCells: Set<String> = []
-        for (row, line) in startX.enumerated() {
-            for (column, character) in line.enumerated() where character == "X" {
-                xCells.insert(PuzzleEngine.cellId(row: row, column: column))
             }
         }
 
@@ -505,7 +406,6 @@ nonisolated enum Puzzles {
             ),
             gridSize: solution.count,
             solution: solutionCells,
-            startingX: xCells,
             startingRevealed: revealed,
             hintCost: 25
         )

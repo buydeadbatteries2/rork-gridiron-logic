@@ -86,12 +86,10 @@ struct DefensiveGrid: View {
     @ViewBuilder
     private func cellView(row: Int, column: Int) -> some View {
         let cellId = PuzzleEngine.cellId(row: row, column: column)
-        // Only starting clues are locked; every other empty square is tappable.
-        let isClue = puzzle.startingX.contains(cellId)
 
         ZStack {
             RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(Color.black.opacity(isClue || marks.contains(cellId) ? 0.34 : 0.26))
+                .fill(Color.black.opacity(marks.contains(cellId) ? 0.34 : 0.26))
             RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .stroke(
                     revealed[cellId] != nil ? Palette.gold.opacity(0.7) : Color.white.opacity(0.22),
@@ -101,11 +99,6 @@ struct DefensiveGrid: View {
             if let kindId = revealed[cellId] {
                 RevealMarker(kindId: kindId)
                     .transition(.scale(scale: 0.3).combined(with: .opacity))
-            } else if isClue {
-                // Starting clue: dimmer, locked.
-                Image(systemName: "xmark")
-                    .font(.system(size: 15, weight: .heavy))
-                    .foregroundStyle(Palette.chalk.opacity(0.38))
             } else if marks.contains(cellId) {
                 // Player mark: bright, always removable.
                 Image(systemName: "xmark")

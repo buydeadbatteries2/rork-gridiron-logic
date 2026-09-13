@@ -170,8 +170,7 @@ final class GameState {
     func tapCell(_ cellId: String) {
         guard !puzzleSession.isComplete else { return }
         let puzzle = activePuzzle
-        guard puzzleSession.revealed[cellId] == nil,
-              !puzzle.startingX.contains(cellId) else { return }
+        guard puzzleSession.revealed[cellId] == nil else { return }
 
         // Guided tutorial: only the highlighted square responds.
         if guideCellId != nil, cellId != guideCellId { return }
@@ -299,15 +298,15 @@ final class GameState {
         guideMessage = nil
         guard activeLevelNumber == 1, !tutorialSeen else { return }
 
-        // Guided taps on the real Level 1 board. The first two place harmless
-        // X marks; the third teaches the no-touch deduction from the revealed
-        // linebacker (the player must X that neighbor themselves); the final
-        // one closes row 1 onto its safety and triggers the reveal through the
-        // normal engine path. Every X is placed by the player's own tap.
+        // Guided taps on the clean Level 1 board: ZERO X marks at the snap and
+        // one revealed linebacker. Every X below is placed by the player's own
+        // tap, and the three rules are taught in order — row, column, no-touch.
+        // The final tap closes row 1 onto its safety and triggers the reveal
+        // through the normal engine path.
         guideSteps = [
-            GuideStep(cellId: PuzzleEngine.cellId(row: 4, column: 4), message: "TAP THIS SQUARE TO BLOCK IT."),
-            GuideStep(cellId: PuzzleEngine.cellId(row: 1, column: 0), message: "GOOD. THIS SPACE CAN'T HOLD A DEFENDER EITHER."),
-            GuideStep(cellId: PuzzleEngine.cellId(row: 1, column: 2), message: "A DEFENDER IS ALREADY ON THE FIELD. DEFENDERS CAN'T TOUCH. TAP HERE TO BLOCK IT."),
+            GuideStep(cellId: PuzzleEngine.cellId(row: 1, column: 0), message: "EVERY ROW HAS ONE DEFENDER. THE LB COVERS THIS ROW. TAP HERE TO BLOCK IT."),
+            GuideStep(cellId: PuzzleEngine.cellId(row: 1, column: 1), message: "EVERY COLUMN HAS ONE DEFENDER. THIS COLUMN IS COVERED TOO. TAP HERE TO BLOCK IT."),
+            GuideStep(cellId: PuzzleEngine.cellId(row: 1, column: 2), message: "DEFENDERS CAN'T TOUCH — EVEN DIAGONALLY. TAP HERE TO BLOCK IT."),
             GuideStep(cellId: PuzzleEngine.cellId(row: 1, column: 4), message: "ONE MORE. TAP THIS SQUARE TO BLOCK IT."),
         ]
         guideCellId = guideSteps[0].cellId

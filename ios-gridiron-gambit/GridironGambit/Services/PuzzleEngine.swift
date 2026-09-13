@@ -6,8 +6,8 @@ import Foundation
 ///
 /// The player performs every deduction on the board. The engine never places
 /// X marks and never cascades: at most ONE defender reveals per player action,
-/// and only when the player's own marks — combined with starting clues and
-/// already-revealed defenders — close a row or column onto its true solution.
+/// and only when the player's OWN marks close a row or column onto its true
+/// solution. Boards start clean — there are no pre-filled X clues.
 nonisolated enum PuzzleEngine {
 
     // MARK: - Cell addressing
@@ -51,11 +51,12 @@ nonisolated enum PuzzleEngine {
 
     // MARK: - Derived board state
 
-    /// Cells that provably hide no defender: starting X clues plus every cell
-    /// sharing a row, column, or neighborhood with a revealed defender.
-    /// The engine uses these only to evaluate reveals — it never draws them.
+    /// Cells that provably hide no defender because of the revealed defense:
+    /// every cell sharing a row, column, or neighborhood with a revealed
+    /// defender. The engine uses these only to evaluate contradictions and
+    /// hint targets — it never draws them, and a reveal never credits them.
     static func impossibleCells(_ puzzle: PuzzleDefinition, revealed: [String: String]) -> Set<String> {
-        var impossible = puzzle.startingX
+        var impossible: Set<String> = []
         let size = puzzle.gridSize
 
         for revealedCell in revealed.keys {
@@ -77,26 +78,23 @@ nonisolated enum PuzzleEngine {
 
     /// The single reveal check, run after every player action. Returns at most
     /// one reveal: the first row or column (reading order) where the player's
-    /// OWN marks and the puzzle's starting clues leave exactly one open cell,
-    /// that cell is the stored solution, and at least one of the player's own
-    /// X marks sits in that line.
+    /// OWN X marks leave exactly one open cell, that cell is the stored
+    /// solution, and at least one of the player's own X marks sits in that
+    /// line (always true now that there are no starting clues, but kept as a
+    /// guard).
     ///
     /// Revealed defenders are INFORMATION ONLY here: the engine does not credit
     /// their rows, columns, or neighbors as blocked. The player must personally
     /// X those squares before a line can close — internal knowledge about the
-    /// geometry of revealed defenders never triggers a reveal by itself.
-    ///
-    /// The engagement requirement keeps pre-blocked lines (closed purely by
-    /// starting clues) from revealing without the player demonstrating the
-    /// deduction themselves.
+    /// geometry of revealed defenders never triggers a reveal by itself, and
+    /// no hidden starting eliminations help the player.
     static func forcedReveal(
         _ puzzle: PuzzleDefinition,
         revealed: [String: String],
         marks: Set<String>
     ) -> (cell: String, kind: String)? {
-        // Only what the player can SEE as blocked counts: starting clues and
-        // the player's own X marks. Nothing derived from revealed defenders.
-        let blocked = puzzle.startingX.union(marks)
+        // Only what the player can SEE as blocked counts: their own X marks.
+        let blocked = marks
         let size = puzzle.gridSize
 
         let lines: [[String]] =
@@ -159,7 +157,6 @@ nonisolated enum PuzzleEngine {
         for cellId in puzzle.allCellIds {
             guard puzzle.solution[cellId] == nil,
                   revealed[cellId] == nil,
-                  !puzzle.startingX.contains(cellId),
                   !marks.contains(cellId) else { continue }
 
             var trial = marks

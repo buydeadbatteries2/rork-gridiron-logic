@@ -2,9 +2,10 @@ import XCTest
 @testable import GridironGambit
 
 /// Verifies every Stadium 1 puzzle under the three universal rules — one
-/// defender per row, one per column, defenders never touch. Each puzzle must
-/// have EXACTLY ONE solution consistent with its starting X clues and
-/// revealed defenders, and it must match the stored solution.
+/// defender per row, one per column, defenders never touch. Boards start
+/// clean: no pre-filled X marks exist. Each puzzle must have EXACTLY ONE
+/// solution consistent with its visible starting revealed defenders, and it
+/// must match the stored solution.
 final class PuzzleTests: XCTestCase {
 
     // MARK: - Data integrity
@@ -68,24 +69,23 @@ final class PuzzleTests: XCTestCase {
         }
     }
 
-    func testStartingXCluesNeverCoverSolutionOrRevealedCells() {
+    func testStartingRevealedDefendersMatchSolutionAndNeverTouch() {
         for puzzle in Puzzles.all {
-            for cellId in puzzle.startingX {
-                XCTAssertNil(
-                    puzzle.solution[cellId],
-                    "Level \(puzzle.levelNumber): starting X sits on a solution cell \(cellId)"
-                )
-                XCTAssertNil(
-                    puzzle.startingRevealed[cellId],
-                    "Level \(puzzle.levelNumber): starting X sits on a revealed defender \(cellId)"
-                )
-            }
             for (cellId, kind) in puzzle.startingRevealed {
                 XCTAssertEqual(
                     puzzle.solution[cellId],
                     kind,
                     "Level \(puzzle.levelNumber): revealed defender contradicts solution at \(cellId)"
                 )
+            }
+            let cells = Array(puzzle.startingRevealed.keys)
+            for i in cells.indices {
+                for j in cells.indices where i < j {
+                    XCTAssertFalse(
+                        PuzzleEngine.areNeighbors(cells[i], cells[j]),
+                        "Level \(puzzle.levelNumber): starting reveals at \(cells[i]) and \(cells[j]) touch"
+                    )
+                }
             }
         }
     }
@@ -94,7 +94,18 @@ final class PuzzleTests: XCTestCase {
 
     func testEveryPuzzleHasExactlyOneSolution() {
         for puzzle in Puzzles.all {
-            let solutions = bruteForcePositionSets(puzzle)
+            // Level 1 intentionally starts with a single reveal; the guided
+            // tutorial drives the safety reveal before free play begins.
+            var revealed = puzzle.startingRevealed
+            if puzzle.levelNumber == 1 {
+                XCTAssertEqual(
+                    bruteForcePositionSets(puzzle, revealed: revealed).count,
+                    2,
+                    "Level 1 should present exactly two candidate defenses before the tutorial reveal"
+                )
+                revealed["cell-1-3"] = "s"
+            }
+            let solutions = bruteForcePositionSets(puzzle, revealed: revealed)
             XCTAssertEqual(
                 solutions.count,
                 1,
@@ -119,12 +130,15 @@ final class PuzzleTests: XCTestCase {
         }
     }
 
-    /// Enumerates every placement satisfying the three universal rules,
-    /// the starting X clues, and the starting revealed defenders.
-    private func bruteForcePositionSets(_ puzzle: PuzzleDefinition) -> [[Int]] {
+    /// Enumerates every placement satisfying the three universal rules and the
+    /// given VISIBLE revealed defenders. No starting X clues exist anymore.
+    private func bruteForcePositionSets(
+        _ puzzle: PuzzleDefinition,
+        revealed: [String: String]
+    ) -> [[Int]] {
         let size = puzzle.gridSize
         var revealedByRow: [Int: Int] = [:]
-        for cellId in puzzle.startingRevealed.keys {
+        for cellId in revealed.keys {
             if let row = PuzzleEngine.row(ofCellId: cellId),
                let column = PuzzleEngine.column(ofCellId: cellId) {
                 revealedByRow[row] = column
@@ -141,7 +155,6 @@ final class PuzzleTests: XCTestCase {
             }
             for column in 0..<size {
                 let cellId = PuzzleEngine.cellId(row: row, column: column)
-                if puzzle.startingX.contains(cellId) { continue }
                 if let fixed = revealedByRow[row], fixed != column { continue }
                 if row > 0, abs(column - columns[row - 1]) <= 1 { continue }
                 columns.append(column)
@@ -179,22 +192,15 @@ final class PuzzleTests: XCTestCase {
         XCTAssertFalse(impossible.contains("cell-2-4"))
     }
 
-    /// A pre-blocked line (closed purely by starting clues) must NOT reveal
-    /// without at least one of the player's own X marks in that line.
-    func testPreBlockedLineDoesNotRevealWithoutPlayerMark() {
-        // Row 0 blocked by clues on columns 1-3, leaving only cell-0-0 (solution).
-        let blocked: Set<String> = Set((1...3).map { PuzzleEngine.cellId(row: 0, column: $0) })
-        let puzzle = makeTestPuzzle(startX: blocked)
-
-        XCTAssertNil(
-            PuzzleEngine.forcedReveal(puzzle, revealed: [:], marks: []),
-            "No player mark in the line — the game must not reveal on its own"
-        )
-
-        // One player X in the row closes the deduction legitimately.
-        let forced = PuzzleEngine.forcedReveal(puzzle, revealed: [:], marks: ["cell-0-4"])
-        XCTAssertEqual(forced?.cell, "cell-0-0")
-        XCTAssertEqual(forced?.kind, "cb")
+    /// With zero player marks the board is static: nothing may reveal at the
+    /// snap, on any level, no matter how the revealed defenders sit.
+    func testNoLevelRevealsWithoutPlayerMarks() {
+        for puzzle in Puzzles.all {
+            XCTAssertNil(
+                PuzzleEngine.forcedReveal(puzzle, revealed: puzzle.startingRevealed, marks: []),
+                "Level \(puzzle.levelNumber): the game tried to play itself at the snap"
+            )
+        }
     }
 
     /// A revealed defender is INFORMATION ONLY: the engine must not credit its
@@ -235,25 +241,50 @@ final class PuzzleTests: XCTestCase {
     }
 
     func testNoRevealWhenRemainingCellIsNotTheSolution() {
-        // Row 0: player X'd the real solution cell, leaving cell-0-1 open.
-        let blocked: Set<String> = Set((2...4).map { PuzzleEngine.cellId(row: 0, column: $0) })
-        let puzzle = makeTestPuzzle(startX: blocked)
+        let puzzle = makeTestPuzzle()
 
-        let forced = PuzzleEngine.forcedReveal(puzzle, revealed: [:], marks: ["cell-0-0"])
-        XCTAssertNil(forced, "The remaining cell is not the solution — never reveal")
+        // Row 0 hides the corner at (0,0). The player blocked three squares,
+        // leaving two open — nothing to reveal yet.
+        let partial: Set<String> = ["cell-0-2", "cell-0-3", "cell-0-4"]
+        XCTAssertNil(
+            PuzzleEngine.forcedReveal(puzzle, revealed: [:], marks: partial),
+            "Two cells still open — nothing to reveal"
+        )
+
+        // Closing the row onto a non-solution cell never reveals.
+        let wrongClosure: Set<String> = ["cell-0-0", "cell-0-1", "cell-0-2", "cell-0-3"]
+        XCTAssertNil(
+            PuzzleEngine.forcedReveal(puzzle, revealed: [:], marks: wrongClosure),
+            "The remaining cell is not the solution — never reveal"
+        )
+
+        // Closing the row onto the true solution reveals the corner.
+        let forced = PuzzleEngine.forcedReveal(
+            puzzle,
+            revealed: [:],
+            marks: ["cell-0-1", "cell-0-2", "cell-0-3", "cell-0-4"]
+        )
+        XCTAssertEqual(forced?.cell, "cell-0-0")
+        XCTAssertEqual(forced?.kind, "cb")
     }
 
     func testContradictionDetectedWhenPlayerBlocksADefender() {
-        // Row 0 fully blocked by clues + marks, so no legal spot remains.
-        let blocked: Set<String> = Set((2...4).map { PuzzleEngine.cellId(row: 0, column: $0) })
-        let puzzle = makeTestPuzzle(startX: blocked)
+        let puzzle = makeTestPuzzle()
 
         XCTAssertFalse(
-            PuzzleEngine.hasContradiction(puzzle, revealed: [:], marks: ["cell-0-0"]),
+            PuzzleEngine.hasContradiction(
+                puzzle,
+                revealed: [:],
+                marks: ["cell-0-1", "cell-0-2", "cell-0-3", "cell-0-4"]
+            ),
             "One open cell left — contradictory but not impossible"
         )
         XCTAssertTrue(
-            PuzzleEngine.hasContradiction(puzzle, revealed: [:], marks: ["cell-0-0", "cell-0-1"]),
+            PuzzleEngine.hasContradiction(
+                puzzle,
+                revealed: [:],
+                marks: ["cell-0-0", "cell-0-1", "cell-0-2", "cell-0-3", "cell-0-4"]
+            ),
             "Every row-0 cell is blocked — a mark must be sitting on the defender"
         )
     }
@@ -264,7 +295,6 @@ final class PuzzleTests: XCTestCase {
             for marked: Set<String> in [[], ["cell-0-0"]] {
                 if let cell = PuzzleEngine.hintXCell(puzzle, revealed: revealed, marks: marked) {
                     XCTAssertNil(puzzle.solution[cell], "Level \(puzzle.levelNumber): hint pointed at a defender")
-                    XCTAssertFalse(puzzle.startingX.contains(cell), "Level \(puzzle.levelNumber): hint re-marked a clue")
                     XCTAssertFalse(revealed.keys.contains(cell), "Level \(puzzle.levelNumber): hint re-marked a reveal")
                     XCTAssertFalse(marked.contains(cell), "Level \(puzzle.levelNumber): hint re-marked an X")
                 }
@@ -301,7 +331,7 @@ final class PuzzleTests: XCTestCase {
     // MARK: - Fixtures
 
     /// A 5x5 puzzle with defenders on (0,0), (1,2), (2,4), (3,1), (4,3).
-    private func makeTestPuzzle(startX: Set<String> = []) -> PuzzleDefinition {
+    private func makeTestPuzzle() -> PuzzleDefinition {
         let solution: [String: String] = [
             "cell-0-0": "cb",
             "cell-1-2": "s",
@@ -325,7 +355,6 @@ final class PuzzleTests: XCTestCase {
             ),
             gridSize: 5,
             solution: solution,
-            startingX: startX,
             startingRevealed: [:],
             hintCost: 25
         )

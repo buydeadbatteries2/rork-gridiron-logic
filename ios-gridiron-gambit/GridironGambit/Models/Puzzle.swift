@@ -1,8 +1,9 @@
 import Foundation
 
 /// A fully handcrafted level: the play diagram for theme and context, plus the
-/// hidden 5x5 defensive puzzle — solution cells, starting X clues, and any
-/// defenders already revealed when the snap happens.
+/// hidden 5x5 defensive puzzle — solution cells and any defenders already
+/// revealed when the snap happens. Boards start clean: every X on the field
+/// was placed by the player.
 nonisolated struct PuzzleDefinition: Sendable, Hashable {
     let levelNumber: Int
     let play: OffensivePlay
@@ -10,8 +11,6 @@ nonisolated struct PuzzleDefinition: Sendable, Hashable {
     let gridSize: Int
     /// Cell id -> defender kind id. The unique correct defense.
     let solution: [String: String]
-    /// Cells pre-marked with an X as starting clues. Locked — a defender never hides here.
-    let startingX: Set<String>
     /// Defenders on the board when the play starts: cell id -> kind id.
     let startingRevealed: [String: String]
     /// Cost in Game Balls for hints after the free one.
