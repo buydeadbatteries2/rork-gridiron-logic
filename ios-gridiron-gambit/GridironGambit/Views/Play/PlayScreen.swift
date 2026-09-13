@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// PLAY tab: the live puzzle board. Mark impossible squares with X, let the
-/// Smart Reveal cascade uncover the hidden defense, and celebrate the stop.
+/// PLAY tab: the live puzzle board. Tap squares to block them, tap again to
+/// clear — the player performs every deduction. One reveal per action, at most.
 struct PlayScreen: View {
     @Environment(GameState.self) private var game
 
@@ -65,19 +65,12 @@ struct PlayScreen: View {
         } message: {
             Text("Hints cost \(puzzle.hintCost) Game Balls. Earn more by clearing levels or visiting the Shop.")
         }
-        .overlay {
-            if game.showTutorial {
-                TutorialOverlay(onFinish: { game.dismissTutorial() })
-                    .zIndex(20)
-            }
-        }
         .task(id: session.toastToken) {
             guard session.toastText != nil else { return }
             try? await Task.sleep(for: .seconds(1.5))
             game.clearToast()
         }
         .sensoryFeedback(.success, trigger: session.revealed.count)
-        .sensoryFeedback(.error, trigger: session.mistakeToken)
     }
 
     // MARK: - Scoreboard
@@ -181,19 +174,26 @@ struct PlayScreen: View {
                     .foregroundStyle(Palette.gold)
             }
 
+            if let message = game.guideMessage {
+                GuideBanner(
+                    message: message,
+                    showsSkip: game.guideCellId != nil,
+                    onSkip: { game.skipGuide() }
+                )
+                .id(message)
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+
             DefensiveGrid(
                 puzzle: puzzle,
                 marks: session.marks,
-                autoEliminated: session.autoEliminated,
-                mistakes: session.mistakes,
                 revealed: session.revealed,
                 hintFlashCellId: session.hintFlashCellId,
-                mistakeCellId: session.mistakeCellId,
-                mistakeToken: session.mistakeToken,
-                onTap: { game.tapCell($0) },
-                onLongPress: { game.removeMark($0) }
+                guideCellId: game.guideCellId,
+                onTap: { game.tapCell($0) }
             )
         }
+        .animation(.spring(response: 0.35, dampingFraction: 0.8), value: game.guideMessage)
         .padding(12)
         .background {
             RoundedRectangle(cornerRadius: 16, style: .continuous)
@@ -220,10 +220,10 @@ struct PlayScreen: View {
                 }
 
             VStack(alignment: .leading, spacing: 3) {
-                Text("Mark squares that can't hide a defender.")
+                Text("Tap a square to block it. Tap again to clear it.")
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(Palette.chalk)
-                Text("Tap an X again to test it. Long-press to erase.")
+                Text("Block every impossible square to reveal the defense.")
                     .font(.system(size: 12, weight: .regular))
                     .foregroundStyle(Palette.muted)
             }
@@ -290,7 +290,7 @@ struct PlayScreen: View {
         switch game.requestHint() {
         case .some(.insufficientBalls):
             showsHintAlert = true
-        case .some(.placed), .none:
+        case .some(.shown), .none:
             break
         }
     }

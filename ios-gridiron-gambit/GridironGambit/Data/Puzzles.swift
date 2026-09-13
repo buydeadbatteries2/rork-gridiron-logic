@@ -60,9 +60,9 @@ nonisolated enum Puzzles {
             ],
             startX: [
                 ".XXX.",
-                ".X..X",
+                ".X...",
                 "X..XX",
-                "XXXX.",
+                "XXX..",
                 ".X.X.",
             ],
             startRevealed: [(2, 1)],

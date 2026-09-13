@@ -22,7 +22,7 @@ nonisolated enum AppTab: String, CaseIterable, Identifiable, Hashable {
 
 /// Result of tapping the hint button.
 nonisolated enum HintOutcome: Sendable, Equatable {
-    case placed(isFree: Bool)
+    case shown(isFree: Bool)
     case insufficientBalls
 }
 
@@ -42,14 +42,14 @@ final class GameState {
     var activeLevelNumber: Int = 1
     var puzzleSession = PuzzleSession()
 
-    /// First-time, five-screen tutorial over the Level 1 board.
-    var showTutorial: Bool = false
+    /// Guided first-time tutorial on Level 1: highlights one square at a time
+    /// and teaches through action. Nil when not guiding.
+    var guideCellId: String? = nil
+    var guideMessage: String? = nil
+    private var guideSteps: [GuideStep] = []
+    private var guideIndex = 0
+    /// Whether the guided tutorial has been completed or skipped.
     var tutorialSeen: Bool = false
-
-    /// True while the Smart Reveal chain is cascading — input is locked.
-    private var isChaining = false
-    /// Bumped on every session reset so stale chain tasks abort.
-    private var chainGeneration = 0
 
     init() {
         loadSavedProgress()
@@ -136,7 +136,6 @@ final class GameState {
         guard level.isUnlocked else { return }
         activeLevelNumber = level.levelNumber
         resetSession()
-        showTutorial = activeLevelNumber == 1 && !tutorialSeen
         selectedTab = .play
     }
 
@@ -156,99 +155,69 @@ final class GameState {
     }
 
     private func resetSession() {
-        chainGeneration += 1
         let puzzle = activePuzzle
         var session = PuzzleSession()
         session.revealed = puzzle.startingRevealed
-        session.autoEliminated = PuzzleEngine.impossibleCells(puzzle, revealed: session.revealed)
         puzzleSession = session
-        isChaining = false
-        runSmartReveals(initialDelay: .seconds(0.9))
+        setupGuide()
     }
 
     // MARK: - Puzzle interaction
 
-    /// The one primary interaction. First tap marks an X; tapping an existing
-    /// player mark tests the square for a hidden defender.
+    /// The one primary interaction: tap an empty square to place an X, tap the
+    /// X to remove it. After every toggle the engine evaluates the board ONCE —
+    /// at most a single reveal, no automatic X marks, no chain reactions.
     func tapCell(_ cellId: String) {
-        guard !puzzleSession.isComplete, !isChaining else { return }
+        guard !puzzleSession.isComplete else { return }
         let puzzle = activePuzzle
         guard puzzleSession.revealed[cellId] == nil,
-              !puzzle.startingX.contains(cellId),
-              !puzzleSession.autoEliminated.contains(cellId),
-              !puzzleSession.mistakes.contains(cellId) else { return }
+              !puzzle.startingX.contains(cellId) else { return }
+
+        // Guided tutorial: only the highlighted square responds.
+        if guideCellId != nil, cellId != guideCellId { return }
 
         if puzzleSession.marks.contains(cellId) {
-            attemptReveal(cellId, puzzle: puzzle)
+            puzzleSession.marks.remove(cellId)
         } else {
             puzzleSession.marks.insert(cellId)
-            runSmartReveals(initialDelay: .seconds(0.4))
         }
+
+        advanceGuide(for: cellId)
+        evaluateBoard()
     }
 
-    /// Long-press erases a player X mark. Marks are free — no penalties ever.
-    func removeMark(_ cellId: String) {
-        guard !puzzleSession.isComplete, !isChaining else { return }
-        puzzleSession.marks.remove(cellId)
-    }
+    /// One evaluation per player action: a single reveal if the player's marks
+    /// legitimately closed a line onto its solution, otherwise a subtle
+    /// contradiction check. Nothing else happens — the board is otherwise
+    /// completely static without input.
+    private func evaluateBoard() {
+        let puzzle = activePuzzle
 
-    private func attemptReveal(_ cellId: String, puzzle: PuzzleDefinition) {
-        if let kindID = puzzle.solution[cellId] {
-            puzzleSession.marks.remove(cellId)
-            revealDefender(cellId: cellId, kindID: kindID)
-        } else {
-            // One mistake, no reset: the square locks as an X and play continues.
-            puzzleSession.wrongReveals += 1
-            puzzleSession.marks.remove(cellId)
-            puzzleSession.mistakes.insert(cellId)
-            puzzleSession.mistakeCellId = cellId
-            puzzleSession.mistakeToken += 1
-            showToast("NOT HERE", isMistake: true)
+        if let forced = PuzzleEngine.forcedReveal(
+            puzzle,
+            revealed: puzzleSession.revealed,
+            marks: puzzleSession.marks
+        ) {
+            revealDefender(cell: forced.cell, kind: forced.kind)
+            return
         }
+
+        let contradictory = PuzzleEngine.hasContradiction(
+            puzzle,
+            revealed: puzzleSession.revealed,
+            marks: puzzleSession.marks
+        )
+        if contradictory, !puzzleSession.hasContradiction {
+            puzzleSession.mistakeCount += 1
+            showToast("CHECK YOUR BLOCKS", isMistake: true)
+        }
+        puzzleSession.hasContradiction = contradictory
     }
 
-    private func revealDefender(cellId: String, kindID: String) {
-        puzzleSession.revealed[cellId] = kindID
-        puzzleSession.autoEliminated = PuzzleEngine.impossibleCells(activePuzzle, revealed: puzzleSession.revealed)
+    private func revealDefender(cell: String, kind: String) {
+        puzzleSession.revealed[cell] = kind
         showToast("DEFENDER REVEALED!", isMistake: false)
         checkCompletion()
-        runSmartReveals()
-    }
-
-    /// Smart Reveal: whenever a row or column has exactly one unblocked cell
-    /// left, its defender reveals automatically — cascading into chains.
-    private func runSmartReveals(initialDelay: Duration = .seconds(0.55)) {
-        guard !isChaining else { return }
-        isChaining = true
-        chainGeneration += 1
-        let generation = chainGeneration
-
-        Task { [weak self] in
-            guard let self else { return }
-            if initialDelay > .zero {
-                try? await Task.sleep(for: initialDelay)
-            }
-            while !Task.isCancelled, generation == self.chainGeneration, !self.puzzleSession.isComplete {
-                let forced = PuzzleEngine.forcedReveals(
-                    self.activePuzzle,
-                    revealed: self.puzzleSession.revealed,
-                    marks: self.puzzleSession.marks
-                )
-                guard let cellId = PuzzleEngine.sortedReadingOrder(forced.keys).first,
-                      let kindID = forced[cellId] else { break }
-
-                self.puzzleSession.revealed[cellId] = kindID
-                self.puzzleSession.autoEliminated = PuzzleEngine.impossibleCells(
-                    self.activePuzzle, revealed: self.puzzleSession.revealed
-                )
-                self.showToast("DEFENDER REVEALED!", isMistake: false)
-                self.checkCompletion()
-                try? await Task.sleep(for: .seconds(0.55))
-            }
-            if generation == self.chainGeneration {
-                self.isChaining = false
-            }
-        }
     }
 
     private func checkCompletion() {
@@ -266,12 +235,18 @@ final class GameState {
 
     // MARK: - Hints
 
-    /// First hint each level is free; later ones cost Game Balls.
-    /// Prefers placing a correct X; falls back to revealing a hidden defender.
+    /// First hint each level is free; later ones cost Game Balls. A hint only
+    /// HIGHLIGHTS one square that can logically be X'd — the player places the
+    /// mark themselves. Never places marks or reveals defenders.
     func requestHint() -> HintOutcome? {
-        guard !puzzleSession.isComplete, !isChaining else { return nil }
+        guard !puzzleSession.isComplete, guideCellId == nil else { return nil }
         let puzzle = activePuzzle
-        let marks = puzzleSession.marks.union(puzzleSession.mistakes)
+
+        guard let cell = PuzzleEngine.hintXCell(
+            puzzle,
+            revealed: puzzleSession.revealed,
+            marks: puzzleSession.marks
+        ) else { return nil }
 
         var isFree = false
         if !puzzleSession.freeHintUsed {
@@ -284,21 +259,10 @@ final class GameState {
             puzzleSession.paidHints += 1
         }
 
-        if let xCell = PuzzleEngine.hintXCell(puzzle, revealed: puzzleSession.revealed, marks: marks) {
-            puzzleSession.marks.insert(xCell)
-            puzzleSession.hintFlashCellId = xCell
-            flashHint()
-            runSmartReveals(initialDelay: .seconds(0.5))
-        } else if let cellId = PuzzleEngine.hintRevealCell(puzzle, revealed: puzzleSession.revealed),
-                  let kindID = puzzle.solution[cellId] {
-            puzzleSession.marks.remove(cellId)
-            puzzleSession.hintFlashCellId = cellId
-            flashHint()
-            revealDefender(cellId: cellId, kindID: kindID)
-        }
-
+        puzzleSession.hintFlashCellId = cell
+        flashHint()
         save()
-        return .placed(isFree: isFree)
+        return .shown(isFree: isFree)
     }
 
     private func flashHint() {
@@ -321,11 +285,69 @@ final class GameState {
         puzzleSession.toastText = nil
     }
 
-    // MARK: - Tutorial
+    // MARK: - Guided tutorial
 
-    /// Dismisses the first-time tutorial for good.
-    func dismissTutorial() {
-        showTutorial = false
+    private struct GuideStep {
+        let cellId: String
+        let message: String
+    }
+
+    private func setupGuide() {
+        guideSteps = []
+        guideIndex = 0
+        guideCellId = nil
+        guideMessage = nil
+        guard activeLevelNumber == 1, !tutorialSeen else { return }
+
+        // Guided taps on the real Level 1 board. The first two place harmless
+        // X marks; the final one closes row 1 onto its safety and triggers the
+        // reveal through the normal engine path.
+        guideSteps = [
+            GuideStep(cellId: PuzzleEngine.cellId(row: 4, column: 4), message: "TAP THIS SQUARE TO BLOCK IT."),
+            GuideStep(cellId: PuzzleEngine.cellId(row: 1, column: 0), message: "GOOD. THIS SPACE CAN'T HOLD A DEFENDER EITHER."),
+            GuideStep(cellId: PuzzleEngine.cellId(row: 1, column: 4), message: "ONE MORE. TAP THIS SQUARE TO BLOCK IT."),
+        ]
+        guideCellId = guideSteps[0].cellId
+        guideMessage = guideSteps[0].message
+    }
+
+    private func advanceGuide(for cellId: String) {
+        guard guideCellId != nil,
+              guideIndex < guideSteps.count,
+              guideSteps[guideIndex].cellId == cellId else { return }
+
+        guideIndex += 1
+        if guideIndex < guideSteps.count {
+            guideCellId = guideSteps[guideIndex].cellId
+            guideMessage = guideSteps[guideIndex].message
+        } else {
+            finishGuide()
+        }
+    }
+
+    private func finishGuide() {
+        guideCellId = nil
+        guideMessage = "NICE! BLOCK EVERY IMPOSSIBLE SPACE AND THE DEFENDER IS REVEALED."
+        tutorialSeen = true
+        save()
+
+        let level = activeLevelNumber
+        Task { [weak self] in
+            try? await Task.sleep(for: .seconds(3.2))
+            guard let self, self.activeLevelNumber == level else { return }
+            self.guideMessage = "NOW USE THE SAME RULES TO FIND THE NEXT DEFENDER."
+            try? await Task.sleep(for: .seconds(3.2))
+            guard self.activeLevelNumber == level else { return }
+            self.guideMessage = nil
+        }
+    }
+
+    /// Skips the guided tutorial for good.
+    func skipGuide() {
+        guideSteps = []
+        guideIndex = 0
+        guideCellId = nil
+        guideMessage = nil
         tutorialSeen = true
         save()
     }
@@ -336,7 +358,7 @@ final class GameState {
     private func completeActiveLevel() {
         let levelNumber = activeLevelNumber
         let reward = activeLevelReward
-        let stars = PuzzleEngine.stars(wrongReveals: puzzleSession.wrongReveals)
+        let stars = PuzzleEngine.stars(mistakes: puzzleSession.mistakeCount)
 
         progress.gameBalls += reward.gameBalls
         progress.xp += reward.xp

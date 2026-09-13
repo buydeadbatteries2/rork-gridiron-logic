@@ -3,6 +3,11 @@ import Foundation
 /// Pure logic for the simplified defensive puzzle. Three universal rules:
 /// exactly one defender per row, one per column, and defenders never touch —
 /// horizontally, vertically, or diagonally. No UI, no state.
+///
+/// The player performs every deduction on the board. The engine never places
+/// X marks and never cascades: at most ONE defender reveals per player action,
+/// and only when the player's own marks — combined with starting clues and
+/// already-revealed defenders — close a row or column onto its true solution.
 nonisolated enum PuzzleEngine {
 
     // MARK: - Cell addressing
@@ -48,6 +53,7 @@ nonisolated enum PuzzleEngine {
 
     /// Cells that provably hide no defender: starting X clues plus every cell
     /// sharing a row, column, or neighborhood with a revealed defender.
+    /// The engine uses these only to evaluate reveals — it never draws them.
     static func impossibleCells(_ puzzle: PuzzleDefinition, revealed: [String: String]) -> Set<String> {
         var impossible = puzzle.startingX
         let size = puzzle.gridSize
@@ -69,78 +75,97 @@ nonisolated enum PuzzleEngine {
         return impossible
     }
 
-    /// The Smart Reveal trigger: rows or columns with exactly one unblocked
-    /// cell left. Player X marks count as blocks, but a defender is only
-    /// auto-revealed when the remaining cell truly is a solution cell — a mark
-    /// on the real solution never causes an unfair reveal.
-    static func forcedReveals(
+    /// The single reveal check, run after every player action. Returns at most
+    /// one reveal: the first row or column (reading order) where the player's
+    /// deductions leave exactly one open cell AND that cell is the stored
+    /// solution AND at least one of the player's own X marks sits in that line.
+    ///
+    /// The engagement requirement keeps pre-blocked lines (closed purely by
+    /// starting clues or revealed defenders) from revealing without the player
+    /// demonstrating the deduction themselves.
+    static func forcedReveal(
         _ puzzle: PuzzleDefinition,
         revealed: [String: String],
         marks: Set<String>
-    ) -> [String: String] {
-        var blocked = impossibleCells(puzzle, revealed: revealed).union(marks)
-        for cellId in revealed.keys { blocked.remove(cellId) }
+    ) -> (cell: String, kind: String)? {
+        let blocked = impossibleCells(puzzle, revealed: revealed).union(marks)
+        let size = puzzle.gridSize
 
-        var byRow: [Int: [String]] = [:]
-        var byColumn: [Int: [String]] = [:]
-        for cellId in puzzle.allCellIds where !blocked.contains(cellId) && revealed[cellId] == nil {
-            if let r = row(ofCellId: cellId) { byRow[r, default: []].append(cellId) }
-            if let c = column(ofCellId: cellId) { byColumn[c, default: []].append(cellId) }
-        }
+        let lines: [[String]] =
+            (0..<size).map { row in (0..<size).map { cellId(row: row, column: $0) } }
+            + (0..<size).map { column in (0..<size).map { cellId(row: $0, column: column) } }
 
-        var forced: [String: String] = [:]
-        for group in [byRow, byColumn] {
-            for (_, cells) in group where cells.count == 1 {
-                let cellId = cells[0]
-                if let kind = puzzle.solution[cellId] {
-                    forced[cellId] = kind
-                }
-            }
+        for line in lines {
+            guard !line.contains(where: { revealed[$0] != nil }) else { continue }
+            let remaining = line.filter { !blocked.contains($0) && revealed[$0] == nil }
+            guard remaining.count == 1 else { continue }
+            let cell = remaining[0]
+            guard let kind = puzzle.solution[cell] else { continue }
+            guard line.contains(where: { marks.contains($0) }) else { continue }
+            return (cell, kind)
         }
-        return forced
+        return nil
     }
 
-    /// The hint's preferred move: a correct X (a cell that provably holds no
-    /// defender and isn't marked yet) chosen to unlock the most Smart Reveals.
-    /// `marks` should include the session's locked mistakes.
+    /// True when a player X mark sits on a hidden defender, making some row or
+    /// column impossible to satisfy. The player is never told WHICH mark is wrong.
+    static func hasContradiction(
+        _ puzzle: PuzzleDefinition,
+        revealed: [String: String],
+        marks: Set<String>
+    ) -> Bool {
+        let blocked = impossibleCells(puzzle, revealed: revealed).union(marks)
+        let size = puzzle.gridSize
+
+        let lines: [[String]] =
+            (0..<size).map { row in (0..<size).map { cellId(row: row, column: $0) } }
+            + (0..<size).map { column in (0..<size).map { cellId(row: $0, column: column) } }
+
+        for line in lines {
+            guard !line.contains(where: { revealed[$0] != nil }) else { continue }
+            let remaining = line.filter { !blocked.contains($0) && revealed[$0] == nil }
+            if remaining.isEmpty { return true }
+        }
+        return false
+    }
+
+    /// The hint's target: ONE square the player can logically X. Prefers a mark
+    /// that completes a reveal, then any provably-empty square tied to a revealed
+    /// defender, then any provably-empty square. The hint only highlights — the
+    /// player still places the X themselves.
     static func hintXCell(
         _ puzzle: PuzzleDefinition,
         revealed: [String: String],
         marks: Set<String>
     ) -> String? {
         let impossible = impossibleCells(puzzle, revealed: revealed)
-        var bestCell: String?
-        var bestGain = -1
+        var best: (cell: String, score: Int)?
 
         for cellId in puzzle.allCellIds {
             guard puzzle.solution[cellId] == nil,
                   revealed[cellId] == nil,
-                  !marks.contains(cellId),
-                  !impossible.contains(cellId) else { continue }
+                  !puzzle.startingX.contains(cellId),
+                  !marks.contains(cellId) else { continue }
 
             var trial = marks
             trial.insert(cellId)
-            let gain = forcedReveals(puzzle, revealed: revealed, marks: trial).count
-            if gain > bestGain {
-                bestGain = gain
-                bestCell = cellId
+            var score = 0
+            if forcedReveal(puzzle, revealed: revealed, marks: trial) != nil {
+                score = 2
+            } else if impossible.contains(cellId) {
+                score = 1
             }
+            if score > (best?.score ?? -1) { best = (cellId, score) }
         }
-        return bestCell
-    }
-
-    /// When every unmarked cell could still hide a defender, the hint falls
-    /// back to revealing the next hidden solution defender in reading order.
-    static func hintRevealCell(_ puzzle: PuzzleDefinition, revealed: [String: String]) -> String? {
-        puzzle.allCellIds.first { puzzle.solution[$0] != nil && revealed[$0] == nil }
+        return best?.cell
     }
 
     // MARK: - Stars
 
-    /// 3 stars for zero failed reveals, 2 for one slip, 1 for anything messier.
-    /// X marks — right or wrong — never reduce stars.
-    static func stars(wrongReveals: Int) -> LevelStars {
-        switch wrongReveals {
+    /// 3 stars for zero contradictions, 2 for one slip, 1 for anything messier.
+    /// X marks themselves — right or wrong — never reduce stars.
+    static func stars(mistakes: Int) -> LevelStars {
+        switch mistakes {
         case 0: .three
         case 1: .two
         default: .one

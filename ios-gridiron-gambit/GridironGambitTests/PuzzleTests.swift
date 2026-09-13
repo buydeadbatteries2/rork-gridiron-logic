@@ -157,10 +157,10 @@ final class PuzzleTests: XCTestCase {
     // MARK: - Engine behavior
 
     func testStars() {
-        XCTAssertEqual(PuzzleEngine.stars(wrongReveals: 0), .three)
-        XCTAssertEqual(PuzzleEngine.stars(wrongReveals: 1), .two)
-        XCTAssertEqual(PuzzleEngine.stars(wrongReveals: 2), .one)
-        XCTAssertEqual(PuzzleEngine.stars(wrongReveals: 5), .one)
+        XCTAssertEqual(PuzzleEngine.stars(mistakes: 0), .three)
+        XCTAssertEqual(PuzzleEngine.stars(mistakes: 1), .two)
+        XCTAssertEqual(PuzzleEngine.stars(mistakes: 2), .one)
+        XCTAssertEqual(PuzzleEngine.stars(mistakes: 5), .one)
     }
 
     func testRevealedDefenderEliminatesRowColumnAndNeighbors() {
@@ -179,61 +179,86 @@ final class PuzzleTests: XCTestCase {
         XCTAssertFalse(impossible.contains("cell-2-4"))
     }
 
-    func testForcedRevealFiresWhenRowHasOneCandidateLeft() {
-        // Block every cell of row 0 except the solution cell cell-0-0.
-        let blocked: Set<String> = Set((1...4).map { PuzzleEngine.cellId(row: 0, column: $0) })
+    /// A pre-blocked line (closed purely by starting clues) must NOT reveal
+    /// without at least one of the player's own X marks in that line.
+    func testPreBlockedLineDoesNotRevealWithoutPlayerMark() {
+        // Row 0 blocked by clues on columns 1-3, leaving only cell-0-0 (solution).
+        let blocked: Set<String> = Set((1...3).map { PuzzleEngine.cellId(row: 0, column: $0) })
         let puzzle = makeTestPuzzle(startX: blocked)
 
-        let forced = PuzzleEngine.forcedReveals(puzzle, revealed: [:], marks: [])
-        XCTAssertEqual(forced["cell-0-0"], "cb")
+        XCTAssertNil(
+            PuzzleEngine.forcedReveal(puzzle, revealed: [:], marks: []),
+            "No player mark in the line — the game must not reveal on its own"
+        )
+
+        // One player X in the row closes the deduction legitimately.
+        let forced = PuzzleEngine.forcedReveal(puzzle, revealed: [:], marks: ["cell-0-4"])
+        XCTAssertEqual(forced?.cell, "cell-0-0")
+        XCTAssertEqual(forced?.kind, "cb")
     }
 
-    func testPlayerMarkOnSolutionCellNeverCausesUnfairReveal() {
-        // Row 0: player wrongly X'd the real solution cell, leaving cell-0-1 open.
+    func testNoRevealWhenRemainingCellIsNotTheSolution() {
+        // Row 0: player X'd the real solution cell, leaving cell-0-1 open.
         let blocked: Set<String> = Set((2...4).map { PuzzleEngine.cellId(row: 0, column: $0) })
         let puzzle = makeTestPuzzle(startX: blocked)
 
-        let forced = PuzzleEngine.forcedReveals(puzzle, revealed: [:], marks: ["cell-0-0"])
-        XCTAssertNil(forced["cell-0-1"], "The remaining cell is not the solution — no auto-reveal")
+        let forced = PuzzleEngine.forcedReveal(puzzle, revealed: [:], marks: ["cell-0-0"])
+        XCTAssertNil(forced, "The remaining cell is not the solution — never reveal")
     }
 
-    func testHintTargetsAreSensible() {
+    func testContradictionDetectedWhenPlayerBlocksADefender() {
+        // Row 0 fully blocked by clues + marks, so no legal spot remains.
+        let blocked: Set<String> = Set((2...4).map { PuzzleEngine.cellId(row: 0, column: $0) })
+        let puzzle = makeTestPuzzle(startX: blocked)
+
+        XCTAssertFalse(
+            PuzzleEngine.hasContradiction(puzzle, revealed: [:], marks: ["cell-0-0"]),
+            "One open cell left — contradictory but not impossible"
+        )
+        XCTAssertTrue(
+            PuzzleEngine.hasContradiction(puzzle, revealed: [:], marks: ["cell-0-0", "cell-0-1"]),
+            "Every row-0 cell is blocked — a mark must be sitting on the defender"
+        )
+    }
+
+    func testHintHighlightsCorrectSquares() {
         for puzzle in Puzzles.all {
             let revealed = puzzle.startingRevealed
-            if let xCell = PuzzleEngine.hintXCell(puzzle, revealed: revealed, marks: []) {
-                XCTAssertNil(puzzle.solution[xCell], "Level \(puzzle.levelNumber): hint X'd a solution cell")
-                XCTAssertFalse(puzzle.startingX.contains(xCell), "Level \(puzzle.levelNumber): hint re-marked a clue")
-            }
-            if let revealCell = PuzzleEngine.hintRevealCell(puzzle, revealed: revealed) {
-                XCTAssertNotNil(puzzle.solution[revealCell], "Level \(puzzle.levelNumber): hint reveal is not a solution cell")
+            for marked: Set<String> in [[], ["cell-0-0"]] {
+                if let cell = PuzzleEngine.hintXCell(puzzle, revealed: revealed, marks: marked) {
+                    XCTAssertNil(puzzle.solution[cell], "Level \(puzzle.levelNumber): hint pointed at a defender")
+                    XCTAssertFalse(puzzle.startingX.contains(cell), "Level \(puzzle.levelNumber): hint re-marked a clue")
+                    XCTAssertFalse(revealed.keys.contains(cell), "Level \(puzzle.levelNumber): hint re-marked a reveal")
+                    XCTAssertFalse(marked.contains(cell), "Level \(puzzle.levelNumber): hint re-marked an X")
+                }
             }
         }
     }
 
-    func testHintCompletesLevelOneByOne() {
-        let puzzle = Puzzles.puzzle(for: 1)!
-        var revealed = puzzle.startingRevealed
-        var marks: Set<String> = []
+    /// Simulates a player who only ever follows hints: mark the hinted square,
+    /// let the engine evaluate once (single reveal, no chains). Must finish every level.
+    func testHintGuidedPlayCompletesEveryLevel() {
+        for puzzle in Puzzles.all {
+            var revealed = puzzle.startingRevealed
+            var marks: Set<String> = []
+            var guardCounter = 0
 
-        while revealed.count < puzzle.solution.count {
-            if let xCell = PuzzleEngine.hintXCell(puzzle, revealed: revealed, marks: marks) {
-                marks.insert(xCell)
-                // Smart Reveal may cascade.
-                var forced = PuzzleEngine.forcedReveals(puzzle, revealed: revealed, marks: marks)
-                while let cellId = PuzzleEngine.sortedReadingOrder(forced.keys).first,
-                      let kind = forced[cellId] {
-                    revealed[cellId] = kind
-                    forced = PuzzleEngine.forcedReveals(puzzle, revealed: revealed, marks: marks)
+            while revealed.count < puzzle.solution.count {
+                guardCounter += 1
+                XCTAssertLessThan(guardCounter, 60, "Level \(puzzle.levelNumber): hint-guided play stalled")
+
+                guard let cell = PuzzleEngine.hintXCell(puzzle, revealed: revealed, marks: marks) else {
+                    XCTFail("Level \(puzzle.levelNumber): hint found no square")
+                    break
                 }
-            } else if let revealCell = PuzzleEngine.hintRevealCell(puzzle, revealed: revealed),
-                      let kind = puzzle.solution[revealCell] {
-                revealed[revealCell] = kind
-            } else {
-                XCTFail("Hint loop stalled on level 1")
-                return
+                marks.insert(cell)
+
+                if let forced = PuzzleEngine.forcedReveal(puzzle, revealed: revealed, marks: marks) {
+                    revealed[forced.cell] = forced.kind
+                }
             }
+            XCTAssertEqual(revealed, puzzle.solution, "Level \(puzzle.levelNumber)")
         }
-        XCTAssertEqual(revealed, puzzle.solution)
     }
 
     // MARK: - Fixtures

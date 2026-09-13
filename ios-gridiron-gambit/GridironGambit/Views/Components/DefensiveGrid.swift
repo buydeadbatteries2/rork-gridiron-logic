@@ -2,19 +2,15 @@ import SwiftUI
 
 /// The 5x5 defensive logic grid, styled as a tactical overlay on turf.
 /// One defender hides in every row and column; none may touch. The single
-/// interaction: tap to mark an X, tap the X again to test the square,
-/// long-press to erase the mark.
+/// interaction: tap an empty square to place an X, tap the X to remove it.
+/// The game never places X marks — only the player does.
 struct DefensiveGrid: View {
     let puzzle: PuzzleDefinition
     let marks: Set<String>
-    let autoEliminated: Set<String>
-    let mistakes: Set<String>
     let revealed: [String: String]
     var hintFlashCellId: String?
-    var mistakeCellId: String?
-    var mistakeToken: Int
+    var guideCellId: String?
     var onTap: (String) -> Void
-    var onLongPress: (String) -> Void
 
     private let laneLabels = ["L OUT", "L IN", "MID", "R IN", "R OUT"]
     private let depthLabels = ["DEEP", "INTER", "UNDER", "SHORT", "LINE"]
@@ -90,13 +86,12 @@ struct DefensiveGrid: View {
     @ViewBuilder
     private func cellView(row: Int, column: Int) -> some View {
         let cellId = PuzzleEngine.cellId(row: row, column: column)
-        let isLocked = puzzle.startingX.contains(cellId)
-            || autoEliminated.contains(cellId)
-            || mistakes.contains(cellId)
+        // Only starting clues are locked; every other empty square is tappable.
+        let isClue = puzzle.startingX.contains(cellId)
 
         ZStack {
             RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(Color.black.opacity(isLocked || marks.contains(cellId) ? 0.34 : 0.26))
+                .fill(Color.black.opacity(isClue || marks.contains(cellId) ? 0.34 : 0.26))
             RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .stroke(
                     revealed[cellId] != nil ? Palette.gold.opacity(0.7) : Color.white.opacity(0.22),
@@ -106,15 +101,18 @@ struct DefensiveGrid: View {
             if let kindId = revealed[cellId] {
                 RevealMarker(kindId: kindId)
                     .transition(.scale(scale: 0.3).combined(with: .opacity))
-            } else if isLocked {
+            } else if isClue {
+                // Starting clue: dimmer, locked.
                 Image(systemName: "xmark")
                     .font(.system(size: 15, weight: .heavy))
                     .foregroundStyle(Palette.chalk.opacity(0.38))
             } else if marks.contains(cellId) {
+                // Player mark: bright, always removable.
                 Image(systemName: "xmark")
                     .font(.system(size: 17, weight: .heavy))
                     .foregroundStyle(Palette.accentBright)
                     .shadow(color: Palette.accent.opacity(0.7), radius: 4)
+                    .transition(.scale(scale: 0.5).combined(with: .opacity))
             } else {
                 Circle()
                     .fill(Color.white.opacity(0.2))
@@ -124,26 +122,36 @@ struct DefensiveGrid: View {
             if cellId == hintFlashCellId {
                 HintPulse()
             }
+            if cellId == guideCellId {
+                GuidePulse()
+            }
         }
         .contentShape(.rect)
         .onTapGesture { onTap(cellId) }
-        .onLongPressGesture(minimumDuration: 0.4) { onLongPress(cellId) }
-        .modifier(CellShaker(isActive: cellId == mistakeCellId, token: mistakeToken))
+        .animation(.spring(response: 0.35, dampingFraction: 0.65), value: marks)
         .animation(.spring(response: 0.4, dampingFraction: 0.6), value: revealed)
     }
+}
 
-    /// Shakes only the cell that just failed a reveal attempt.
-    private struct CellShaker: ViewModifier {
-        let isActive: Bool
-        let token: Int
+/// Pulsing highlight on the square the guided tutorial wants tapped.
+private struct GuidePulse: View {
+    @State private var pulse = false
 
-        func body(content: Content) -> some View {
-            if isActive {
-                content.shaking(on: token)
-            } else {
-                content
+    var body: some View {
+        RoundedRectangle(cornerRadius: 10, style: .continuous)
+            .fill(Palette.gold.opacity(pulse ? 0.22 : 0.05))
+            .overlay {
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .stroke(Palette.gold, lineWidth: 2.5)
+                    .scaleEffect(pulse ? 1.08 : 1.0)
+                    .opacity(pulse ? 0.35 : 1.0)
             }
-        }
+            .onAppear {
+                withAnimation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true)) {
+                    pulse = true
+                }
+            }
+            .allowsHitTesting(false)
     }
 }
 

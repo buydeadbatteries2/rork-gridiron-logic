@@ -25,10 +25,10 @@ struct RulesSheet: View {
             .padding(.top, 20)
 
             VStack(alignment: .leading, spacing: 8) {
-                Label("Tap a square to mark an X.", systemImage: "hand.tap")
-                Label("Tap the X again to test for a defender.", systemImage: "arrow.up.circle")
-                Label("Long-press an X to erase it — marks are always free.", systemImage: "eraser")
-                Label("A wrong test costs a star. X marks never do.", systemImage: "star")
+                Label("Tap an empty square to mark an X.", systemImage: "hand.tap")
+                Label("Tap the X again to remove it — marks are always free.", systemImage: "arrow.uturn.backward")
+                Label("When your blocks leave one legal spot, the defender is revealed.", systemImage: "shield.fill")
+                Label("CHECK YOUR BLOCKS means one of your X's covers a hidden defender.", systemImage: "exclamationmark.triangle")
             }
             .font(.system(size: 13, weight: .medium))
             .foregroundStyle(Palette.muted)
