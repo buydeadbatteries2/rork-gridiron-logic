@@ -22,6 +22,7 @@ struct PlayScreen: View {
                     situationPanel
                     playNameCard
                     fieldCard
+                    RuleCardsRow()
                     gridCard
                     statusCard
                 }
@@ -42,6 +43,11 @@ struct PlayScreen: View {
 
             toastBanner
 
+            if session.isDriveOver {
+                DriveOverOverlay(onRetry: { game.replayLevel() })
+                    .zIndex(9)
+            }
+
             if session.isComplete {
                 WinOverlay(
                     stars: session.earnedStars,
@@ -58,6 +64,7 @@ struct PlayScreen: View {
         }
         .animation(.spring(response: 0.45, dampingFraction: 0.8), value: session.isComplete)
         .animation(.spring(response: 0.35, dampingFraction: 0.75), value: session.toastToken)
+        .animation(.easeInOut(duration: 0.25), value: session.isDriveOver)
         .sheet(isPresented: $showsSettings) { SettingsSheet() }
         .sheet(isPresented: $showsRules) { RulesSheet() }
         .alert("Not Enough Game Balls", isPresented: $showsHintAlert) {
@@ -71,6 +78,7 @@ struct PlayScreen: View {
             game.clearToast()
         }
         .sensoryFeedback(.success, trigger: session.revealed.count)
+        .sensoryFeedback(.error, trigger: session.blownToken)
     }
 
     // MARK: - Scoreboard
@@ -174,6 +182,12 @@ struct PlayScreen: View {
                     .foregroundStyle(Palette.gold)
             }
 
+            DefenseStatusBar(
+                revealedKinds: session.revealed.values.sorted(),
+                total: puzzle.solution.count,
+                downs: session.downs
+            )
+
             if let message = game.guideMessage {
                 GuideBanner(
                     message: message,
@@ -190,6 +204,9 @@ struct PlayScreen: View {
                 revealed: session.revealed,
                 hintFlashCellId: session.hintFlashCellId,
                 guideCellId: game.guideCellId,
+                coachCellId: session.coachCellId,
+                blownCellId: session.blownCellId,
+                blownToken: session.blownToken,
                 onTap: { game.tapCell($0) }
             )
         }

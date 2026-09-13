@@ -158,17 +158,27 @@ final class GameState {
         let puzzle = activePuzzle
         var session = PuzzleSession()
         session.revealed = puzzle.startingRevealed
+        // COACH'S READ: a one-time starting nudge — pulse one square the
+        // player can safely block. Never places marks, never reveals.
+        if !puzzle.startingRevealed.isEmpty {
+            session.coachCellId = PuzzleEngine.hintXCell(puzzle, revealed: session.revealed, marks: [])
+        }
         puzzleSession = session
         setupGuide()
+        if guideCellId != nil { puzzleSession.coachCellId = nil }
     }
 
     // MARK: - Puzzle interaction
 
     /// The one primary interaction: tap an empty square to place an X, tap the
     /// X to remove it. After every toggle the engine evaluates the board ONCE —
-    /// at most a single reveal, no automatic X marks, no chain reactions.
+    /// at most a single reveal, no automatic X marks, no chain reactions. An X
+    /// that makes the visible state impossible is a blown assignment: it is
+    /// undone automatically and costs one down.
     func tapCell(_ cellId: String) {
-        guard !puzzleSession.isComplete else { return }
+        guard !puzzleSession.isComplete,
+              !puzzleSession.isDriveOver,
+              !puzzleSession.isAwaitingUndo else { return }
         let puzzle = activePuzzle
         guard puzzleSession.revealed[cellId] == nil else { return }
 
@@ -177,18 +187,26 @@ final class GameState {
 
         if puzzleSession.marks.contains(cellId) {
             puzzleSession.marks.remove(cellId)
+            evaluateBoard()
         } else {
             puzzleSession.marks.insert(cellId)
+            advanceGuide(for: cellId)
+            if PuzzleEngine.hasContradiction(
+                puzzle,
+                revealed: puzzleSession.revealed,
+                marks: puzzleSession.marks
+            ) {
+                registerBlownAssignment(cellId)
+            } else {
+                evaluateBoard()
+            }
         }
-
-        advanceGuide(for: cellId)
-        evaluateBoard()
+        puzzleSession.coachCellId = nil
     }
 
     /// One evaluation per player action: a single reveal if the player's marks
-    /// legitimately closed a line onto its solution, otherwise a subtle
-    /// contradiction check. Nothing else happens — the board is otherwise
-    /// completely static without input.
+    /// legitimately closed a row, column, or zone onto its solution. Nothing
+    /// else happens — the board is otherwise completely static without input.
     private func evaluateBoard() {
         let puzzle = activePuzzle
 
@@ -198,19 +216,31 @@ final class GameState {
             marks: puzzleSession.marks
         ) {
             revealDefender(cell: forced.cell, kind: forced.kind)
-            return
         }
+    }
 
-        let contradictory = PuzzleEngine.hasContradiction(
-            puzzle,
-            revealed: puzzleSession.revealed,
-            marks: puzzleSession.marks
-        )
-        if contradictory, !puzzleSession.hasContradiction {
-            puzzleSession.mistakeCount += 1
-            showToast("CHECK YOUR BLOCKS", isMistake: true)
+    /// The latest X made the visible state impossible under the four rules.
+    /// The move is invalid: shake the cell, show "BLOWN ASSIGNMENT", undo the
+    /// X automatically, and remove one down. Never reveals where the defender
+    /// is and never places any other marks.
+    private func registerBlownAssignment(_ cellId: String) {
+        puzzleSession.downs = max(0, puzzleSession.downs - 1)
+        puzzleSession.blownCellId = cellId
+        puzzleSession.blownToken += 1
+        puzzleSession.isAwaitingUndo = true
+        showToast("BLOWN ASSIGNMENT", isMistake: true)
+
+        let level = activeLevelNumber
+        Task { [weak self] in
+            try? await Task.sleep(for: .seconds(0.85))
+            guard let self, self.activeLevelNumber == level else { return }
+            self.puzzleSession.marks.remove(cellId)
+            self.puzzleSession.blownCellId = nil
+            self.puzzleSession.isAwaitingUndo = false
+            if self.puzzleSession.downs <= 0 {
+                self.puzzleSession.isDriveOver = true
+            }
         }
-        puzzleSession.hasContradiction = contradictory
     }
 
     private func revealDefender(cell: String, kind: String) {
@@ -299,15 +329,15 @@ final class GameState {
         guard activeLevelNumber == 1, !tutorialSeen else { return }
 
         // Guided taps on the clean Level 1 board: ZERO X marks at the snap and
-        // one revealed linebacker. Every X below is placed by the player's own
-        // tap, and the three rules are taught in order — row, column, no-touch.
-        // The final tap closes row 1 onto its safety and triggers the reveal
-        // through the normal engine path.
+        // one revealed linebacker. The Coverage Zone rule is taught FIRST, then
+        // row + column, then no-touch. Every X below is placed by the player's
+        // own tap, and the final tap closes row 1 onto its cornerback and
+        // triggers the reveal through the normal engine path.
         guideSteps = [
-            GuideStep(cellId: PuzzleEngine.cellId(row: 1, column: 0), message: "EVERY ROW HAS ONE DEFENDER. THE LB COVERS THIS ROW. TAP HERE TO BLOCK IT."),
-            GuideStep(cellId: PuzzleEngine.cellId(row: 1, column: 1), message: "EVERY COLUMN HAS ONE DEFENDER. THIS COLUMN IS COVERED TOO. TAP HERE TO BLOCK IT."),
-            GuideStep(cellId: PuzzleEngine.cellId(row: 1, column: 2), message: "DEFENDERS CAN'T TOUCH — EVEN DIAGONALLY. TAP HERE TO BLOCK IT."),
-            GuideStep(cellId: PuzzleEngine.cellId(row: 1, column: 4), message: "ONE MORE. TAP THIS SQUARE TO BLOCK IT."),
+            GuideStep(cellId: PuzzleEngine.cellId(row: 1, column: 3), message: "ONE DEFENDER PER ZONE. EACH COLORED ZONE HIDES ONE DEFENDER. THE LB ALREADY COVERS HIS ZONE. BLOCK ANOTHER SPACE IN IT."),
+            GuideStep(cellId: PuzzleEngine.cellId(row: 1, column: 1), message: "ONE PER ROW + COLUMN. EVERY ROW STILL NEEDS ITS OWN DEFENDER. BLOCK THIS SQUARE."),
+            GuideStep(cellId: PuzzleEngine.cellId(row: 1, column: 2), message: "DEFENDERS DON'T TOUCH — EVEN DIAGONALLY. THE LB COVERS NEXT TO HIMSELF. BLOCK IT."),
+            GuideStep(cellId: PuzzleEngine.cellId(row: 1, column: 4), message: "ONE MORE. BLOCK THIS SQUARE TO COMPLETE THE READ."),
         ]
         guideCellId = guideSteps[0].cellId
         guideMessage = guideSteps[0].message
@@ -329,7 +359,7 @@ final class GameState {
 
     private func finishGuide() {
         guideCellId = nil
-        guideMessage = "NICE! BLOCK EVERY IMPOSSIBLE SPACE AND THE DEFENDER IS REVEALED."
+        guideMessage = "NICE READ. KEEP BUILDING YOUR DEFENSE."
         tutorialSeen = true
         save()
 
@@ -356,11 +386,12 @@ final class GameState {
 
     // MARK: - Completion
 
-    /// Pays out the level: stars, Game Balls, XP, level-up, unlock, persistence.
+    /// Pays out the level: stars (equal to downs remaining), Game Balls, XP,
+    /// level-up, unlock, persistence.
     private func completeActiveLevel() {
         let levelNumber = activeLevelNumber
         let reward = activeLevelReward
-        let stars = PuzzleEngine.stars(mistakes: puzzleSession.mistakeCount)
+        let stars = PuzzleEngine.stars(down: puzzleSession.downs)
 
         progress.gameBalls += reward.gameBalls
         progress.xp += reward.xp

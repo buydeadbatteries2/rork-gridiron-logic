@@ -1,13 +1,15 @@
 import Foundation
 
-/// Pure logic for the simplified defensive puzzle. Three universal rules:
-/// exactly one defender per row, one per column, and defenders never touch —
-/// horizontally, vertically, or diagonally. No UI, no state.
+/// Pure logic for the defensive puzzle. The four permanent rules:
+/// exactly one defender per Coverage Zone, one per row, one per column, and
+/// defenders never touch — horizontally, vertically, or diagonally.
+/// No UI, no state.
 ///
 /// The player performs every deduction on the board. The engine never places
 /// X marks and never cascades: at most ONE defender reveals per player action,
-/// and only when the player's OWN marks close a row or column onto its true
-/// solution. Boards start clean — there are no pre-filled X clues.
+/// and only when the player's OWN marks close a row, column, or Coverage Zone
+/// onto its true solution. Boards start clean — there are no pre-filled X
+/// clues; Coverage Zones are puzzle structure, never marks.
 nonisolated enum PuzzleEngine {
 
     // MARK: - Cell addressing
@@ -49,12 +51,93 @@ nonisolated enum PuzzleEngine {
         }
     }
 
+    // MARK: - Coverage Zones
+
+    /// The puzzle's Coverage Zones as lines of cell ids in reading order —
+    /// exactly one line per zone, every cell in exactly one line.
+    static func coverageZoneLines(_ puzzle: PuzzleDefinition) -> [[String]] {
+        let size = puzzle.gridSize
+        var zones: [[String]] = Array(repeating: [], count: size)
+        for cellId in puzzle.allCellIds {
+            if let zone = puzzle.zoneOf[cellId], zone >= 0, zone < size {
+                zones[zone].append(cellId)
+            }
+        }
+        return zones
+    }
+
+    /// Rows, then columns, then Coverage Zones — the three kinds of "lines"
+    /// whose last open square can force a reveal.
+    private static func allLines(_ puzzle: PuzzleDefinition) -> [[String]] {
+        let size = puzzle.gridSize
+        return (0..<size).map { row in (0..<size).map { cellId(row: row, column: $0) } }
+            + (0..<size).map { column in (0..<size).map { cellId(row: $0, column: column) } }
+            + coverageZoneLines(puzzle)
+    }
+
+    // MARK: - Full board consistency (contradiction safety net)
+
+    /// Every complete defense that satisfies all FOUR rules, contains every
+    /// visible revealed defender, and does not sit on any of the player's X
+    /// marks. Brute-forced over at most 5! placements — cheap on a 5x5 board.
+    ///
+    /// - Empty result = the visible state is contradictory (blown assignment).
+    /// - The stored solution is always included while the state is consistent,
+    ///   so any cell agreed on by ALL remaining solutions is provably correct.
+    static func remainingSolutions(
+        _ puzzle: PuzzleDefinition,
+        revealed: [String: String],
+        marks: Set<String>
+    ) -> [[String: String]] {
+        let size = puzzle.gridSize
+        let zoneOfCell: [String: Int] = Dictionary(
+            uniqueKeysWithValues: puzzle.allCellIds.compactMap { id in
+                puzzle.zoneOf[id].map { (id, $0) }
+            }
+        )
+        var results: [[String: String]] = []
+        var columns: [Int] = []
+        var usedColumns = Array(repeating: false, count: size)
+        var usedZones = Array(repeating: false, count: size)
+
+        func backtrack(_ row: Int) {
+            if row == size {
+                var defense: [String: String] = [:]
+                for r in 0..<size {
+                    let id = cellId(row: r, column: columns[r])
+                    guard let kind = puzzle.solution[id] else { return }
+                    guard !marks.contains(id) else { return }
+                    defense[id] = kind
+                }
+                results.append(defense)
+                return
+            }
+            for column in 0..<size {
+                guard !usedColumns[column] else { continue }
+                if row > 0, abs(columns[row - 1] - column) < 2 { continue }
+                guard let zone = zoneOfCell[cellId(row: row, column: column)],
+                      !usedZones[zone] else { continue }
+
+                usedColumns[column] = true
+                usedZones[zone] = true
+                columns.append(column)
+                backtrack(row + 1)
+                columns.removeLast()
+                usedZones[zone] = false
+                usedColumns[column] = false
+            }
+        }
+
+        backtrack(0)
+        return results
+    }
+
     // MARK: - Derived board state
 
-    /// Cells that provably hide no defender because of the revealed defense:
-    /// every cell sharing a row, column, or neighborhood with a revealed
-    /// defender. The engine uses these only to evaluate contradictions and
-    /// hint targets — it never draws them, and a reveal never credits them.
+    /// Cells that provably hide no defender: every cell sharing a row, column,
+    /// neighborhood, or COVERAGE ZONE with a revealed defender. The engine uses
+    /// these only to evaluate hint targets — it never draws them, and a reveal
+    /// never credits them as blocked. The player must personally X them.
     static func impossibleCells(_ puzzle: PuzzleDefinition, revealed: [String: String]) -> Set<String> {
         var impossible: Set<String> = []
         let size = puzzle.gridSize
@@ -72,36 +155,32 @@ nonisolated enum PuzzleEngine {
                 }
             }
         }
+        for line in coverageZoneLines(puzzle) where line.contains(where: { revealed[$0] != nil }) {
+            // A zone that already shows its defender hides no other defenders.
+            impossible.formUnion(line)
+        }
         for revealedCell in revealed.keys { impossible.remove(revealedCell) }
         return impossible
     }
 
     /// The single reveal check, run after every player action. Returns at most
-    /// one reveal: the first row or column (reading order) where the player's
-    /// OWN X marks leave exactly one open cell, that cell is the stored
-    /// solution, and at least one of the player's own X marks sits in that
-    /// line (always true now that there are no starting clues, but kept as a
-    /// guard).
+    /// one reveal: the first row, column, or Coverage Zone (reading order)
+    /// where the player's OWN X marks leave exactly one open cell, that cell is
+    /// the stored solution, and at least one of the player's own X marks sits
+    /// in that line.
     ///
-    /// Revealed defenders are INFORMATION ONLY here: the engine does not credit
-    /// their rows, columns, or neighbors as blocked. The player must personally
-    /// X those squares before a line can close — internal knowledge about the
-    /// geometry of revealed defenders never triggers a reveal by itself, and
-    /// no hidden starting eliminations help the player.
+    /// Revealed defenders and their geometry are INFORMATION ONLY here — the
+    /// engine does not credit their rows, columns, neighbors, or zones as
+    /// blocked. The player must personally X those squares before a line can
+    /// close. A line whose defender is already visible is skipped.
     static func forcedReveal(
         _ puzzle: PuzzleDefinition,
         revealed: [String: String],
         marks: Set<String>
     ) -> (cell: String, kind: String)? {
-        // Only what the player can SEE as blocked counts: their own X marks.
         let blocked = marks
-        let size = puzzle.gridSize
 
-        let lines: [[String]] =
-            (0..<size).map { row in (0..<size).map { cellId(row: row, column: $0) } }
-            + (0..<size).map { column in (0..<size).map { cellId(row: $0, column: column) } }
-
-        for line in lines {
+        for line in allLines(puzzle) {
             guard !line.contains(where: { revealed[$0] != nil }) else { continue }
             let remaining = line.filter { !blocked.contains($0) && revealed[$0] == nil }
             guard remaining.count == 1 else { continue }
@@ -113,45 +192,34 @@ nonisolated enum PuzzleEngine {
         return nil
     }
 
-    /// True when a player X mark sits on a hidden defender, making some row or
-    /// column impossible to satisfy. The player is never told WHICH mark is wrong.
-    ///
-    /// Unlike the reveal check, this MAY use the geometry of revealed defenders:
-    /// if the remaining open cells of a line are all provably impossible (shared
-    /// row, column, or neighborhood with a revealed defender), then any player
-    /// mark covering the line's last viable cell is a genuine contradiction.
-    /// When this returns true, a player mark is always sitting on a defender.
+    /// True when the player's marks have made the visible state impossible:
+    /// NO complete defense satisfies the four rules alongside the revealed
+    /// defenders and the marks. The player is never told WHICH mark is wrong.
     static func hasContradiction(
         _ puzzle: PuzzleDefinition,
         revealed: [String: String],
         marks: Set<String>
     ) -> Bool {
-        let blocked = impossibleCells(puzzle, revealed: revealed).union(marks)
-        let size = puzzle.gridSize
-
-        let lines: [[String]] =
-            (0..<size).map { row in (0..<size).map { cellId(row: row, column: $0) } }
-            + (0..<size).map { column in (0..<size).map { cellId(row: $0, column: column) } }
-
-        for line in lines {
-            guard !line.contains(where: { revealed[$0] != nil }) else { continue }
-            let remaining = line.filter { !blocked.contains($0) && revealed[$0] == nil }
-            if remaining.isEmpty { return true }
-        }
-        return false
+        remainingSolutions(puzzle, revealed: revealed, marks: marks).isEmpty
     }
 
-    /// The hint's target: ONE square the player can logically X. Prefers a mark
-    /// that completes a reveal, then any provably-empty square tied to a revealed
-    /// defender (its row, column, or neighbors — deductions the player should
-    /// make themselves). The hint only highlights — the player still places the
-    /// X themselves, and the reveal only comes once their marks close a line.
+    /// The hint's target: ONE square the player can logically X. Prefers a
+    /// mark that completes a reveal, then a provably-empty square (row,
+    /// column, neighborhood, or zone of a revealed defender), then any square
+    /// eliminated by the full four-rule logic. NEVER a hidden defender — every
+    /// candidate is already a non-solution square. The hint only highlights —
+    /// the player still places the X themselves, and the reveal only comes
+    /// once their marks close a line.
     static func hintXCell(
         _ puzzle: PuzzleDefinition,
         revealed: [String: String],
         marks: Set<String>
     ) -> String? {
         let impossible = impossibleCells(puzzle, revealed: revealed)
+        let possible = Set(
+            remainingSolutions(puzzle, revealed: revealed, marks: marks)
+                .flatMap { $0.keys }
+        )
         var best: (cell: String, score: Int)?
 
         for cellId in puzzle.allCellIds {
@@ -163,8 +231,10 @@ nonisolated enum PuzzleEngine {
             trial.insert(cellId)
             var score = 0
             if forcedReveal(puzzle, revealed: revealed, marks: trial) != nil {
-                score = 2
+                score = 3
             } else if impossible.contains(cellId) {
+                score = 2
+            } else if !possible.contains(cellId) {
                 score = 1
             }
             if score > (best?.score ?? -1) { best = (cellId, score) }
@@ -174,12 +244,12 @@ nonisolated enum PuzzleEngine {
 
     // MARK: - Stars
 
-    /// 3 stars for zero contradictions, 2 for one slip, 1 for anything messier.
-    /// X marks themselves — right or wrong — never reduce stars.
-    static func stars(mistakes: Int) -> LevelStars {
-        switch mistakes {
-        case 0: .three
-        case 1: .two
+    /// Stars equal the downs remaining on a successful completion:
+    /// 3 downs = 3 stars, 2 = 2 stars, 1 = 1 star.
+    static func stars(down: Int) -> LevelStars {
+        switch down {
+        case 3: .three
+        case 2: .two
         default: .one
         }
     }

@@ -18,8 +18,8 @@ struct RulesSheet: View {
                 .padding(.top, 14)
 
             VStack(spacing: 12) {
-                ruleRow(number: "1", title: "ONE DEFENDER PER ROW", message: "Every horizontal row contains exactly one hidden defender.")
-                ruleRow(number: "2", title: "ONE DEFENDER PER COLUMN", message: "Every vertical column contains exactly one hidden defender.")
+                ruleRow(number: "1", title: "ONE DEFENDER PER ZONE", message: "Each colored Coverage Zone hides exactly one defender.")
+                ruleRow(number: "2", title: "ONE PER ROW + COLUMN", message: "Every row and every column contains exactly one hidden defender.")
                 ruleRow(number: "3", title: "DEFENDERS CANNOT TOUCH", message: "Not horizontally, vertically, or diagonally.")
             }
             .padding(.top, 20)
@@ -28,7 +28,8 @@ struct RulesSheet: View {
                 Label("Tap an empty square to mark an X.", systemImage: "hand.tap")
                 Label("Tap the X again to remove it — marks are always free.", systemImage: "arrow.uturn.backward")
                 Label("When your blocks leave one legal spot, the defender is revealed.", systemImage: "shield.fill")
-                Label("CHECK YOUR BLOCKS means one of your X's covers a hidden defender.", systemImage: "exclamationmark.triangle")
+                Label("BLOWN ASSIGNMENT: an X that makes the defense impossible is undone and costs one of your three downs.", systemImage: "exclamationmark.triangle")
+                Label("Finish with downs to spare for more stars.", systemImage: "star.fill")
             }
             .font(.system(size: 13, weight: .medium))
             .foregroundStyle(Palette.muted)
@@ -65,7 +66,7 @@ struct RulesSheet: View {
             Spacer(minLength: 0)
         }
         .padding(.horizontal, 20)
-        .presentationDetents([.height(480)])
+        .presentationDetents([.height(560)])
     }
 
     private func ruleRow(number: String, title: String, message: String) -> some View {

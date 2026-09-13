@@ -1,11 +1,12 @@
 import SwiftUI
 
 /// The 15 handcrafted Stadium 1 puzzles. The offensive play above the grid
-/// carries the theme; the hidden defense is a 5x5 logic grid solved with three
-/// universal rules — one defender per row, one per column, defenders never
-/// touch. Boards start CLEAN: no pre-filled X marks, only revealed defenders
-/// as visible clues. Every puzzle is machine-verified to have exactly one
-/// solution from those visible clues (tools/verify_puzzles.py).
+/// carries the theme; the hidden defense is a 5x5 logic grid solved with four
+/// rules — one defender per Coverage Zone, one per row, one per column, and
+/// defenders never touch. Boards start CLEAN: no pre-filled X marks, only
+/// Coverage Zones and starting revealed defenders as visible clues. Every
+/// puzzle is machine-verified to have exactly one solution under the four
+/// rules (tools/verify_puzzles.py).
 nonisolated enum Puzzles {
 
     /// Zone geometry used to draw routes into the defensive half of the field.
@@ -53,13 +54,20 @@ nonisolated enum Puzzles {
             playName: "Trips Right — Mesh",
             formation: tripsRight,
             solution: [
-                "C....",
-                "...S.",
-                ".L...",
-                "....L",
                 "..C..",
+                "C....",
+                "...L.",
+                ".S...",
+                "....L",
             ],
-            startRevealed: [(2, 1)],
+            zones: [
+                "BAAAA",
+                "BBACC",
+                "BBCCE",
+                "DDCEE",
+                "DDDEE",
+            ],
+            startRevealed: [(2, 3)],
             routes: [
                 routeInto("r1", .vertical, from: 0.93, to: (0, 3), on: .a, crossBy: -0.04),
                 routeInto("r2", .crossing, from: 0.83, to: (0, 1), on: .a, crossBy: -0.20),
@@ -73,13 +81,20 @@ nonisolated enum Puzzles {
             playName: "Twins Left — Slant Flat",
             formation: twinsLeft,
             solution: [
-                "..C..",
-                "....S",
-                "L....",
-                "...L.",
-                ".C...",
+                "...C.",
+                "S....",
+                "..L..",
+                "....C",
+                ".L...",
             ],
-            startRevealed: [(0, 2), (1, 4), (2, 0), (3, 3)],
+            zones: [
+                "BBAAA",
+                "BBAAD",
+                "BCCCD",
+                "EECCD",
+                "EEEDD",
+            ],
+            startRevealed: [(2, 2)],
             routes: [
                 routeInto("r1", .crossing, from: 0.90, to: (0, 1), on: .a, crossBy: -0.28),
                 routeInto("r2", .vertical, from: 0.72, to: (0, 3), on: .a, crossBy: 0.10),
@@ -94,13 +109,20 @@ nonisolated enum Puzzles {
             playName: "Spread — Four Verticals",
             formation: spreadEmpty,
             solution: [
-                ".C...",
-                "...S.",
-                "L....",
-                "..L..",
+                "..S..",
+                "C....",
+                "...L.",
+                ".L...",
                 "....C",
             ],
-            startRevealed: [(0, 1), (1, 3), (2, 0), (3, 2)],
+            zones: [
+                "BBAAA",
+                "BBACA",
+                "BCCCE",
+                "DDDCE",
+                "DDEEE",
+            ],
+            startRevealed: [(0, 2)],
             routes: [
                 routeInto("r1", .vertical, from: 0.95, to: (0, 0), on: .a, crossBy: -0.06),
                 routeInto("r2", .crossing, from: 0.22, to: (0, 2), on: .a, crossBy: 0.22),
@@ -114,13 +136,20 @@ nonisolated enum Puzzles {
             playName: "Tight Y — Deep Cross",
             formation: tightY,
             solution: [
+                "...L.",
+                ".C...",
+                "....C",
                 "..S..",
-                "C....",
-                "....L",
-                ".L...",
-                "...C.",
+                "L....",
             ],
-            startRevealed: [(0, 2), (1, 0), (2, 4)],
+            zones: [
+                "AAAAC",
+                "BBBAC",
+                "EBBCC",
+                "EEDDC",
+                "EEDDD",
+            ],
+            startRevealed: [(3, 2)],
             routes: [
                 routeInto("r1", .crossing, from: 0.84, to: (0, 1), on: .a, crossBy: -0.26),
                 routeInto("r2", .vertical, from: 0.94, to: (0, 2), on: .a, crossBy: -0.06),
@@ -134,13 +163,20 @@ nonisolated enum Puzzles {
             playName: "Pro Set — PA Deep Out",
             formation: proSet,
             solution: [
-                "....S",
-                "..C..",
-                "L....",
                 "...L.",
+                "C....",
+                "..L..",
+                "....S",
                 ".C...",
             ],
-            startRevealed: [(0, 4), (1, 2), (2, 0)],
+            zones: [
+                "BAAAA",
+                "BCCAD",
+                "BCCCD",
+                "BBEDD",
+                "EEEED",
+            ],
+            startRevealed: [(1, 0)],
             routes: [
                 routeInto("r1", .crossing, from: 0.09, to: (0, 1), on: .a, crossBy: 0.20),
                 routeInto("r2", .crossing, from: 0.70, to: (1, 1), on: .a, crossBy: -0.16),
@@ -154,13 +190,20 @@ nonisolated enum Puzzles {
             playName: "Bunch Right — Levels",
             formation: bunchRight,
             solution: [
-                "...C.",
-                ".S...",
-                "....L",
-                "..L..",
+                ".C...",
+                "...L.",
                 "C....",
+                "..S..",
+                "....L",
             ],
-            startRevealed: [(0, 3), (1, 1), (3, 2)],
+            zones: [
+                "AAAAB",
+                "AABBB",
+                "CCCBB",
+                "CDDDE",
+                "CDEEE",
+            ],
+            startRevealed: [],
             routes: [
                 routeInto("r1", .crossing, from: 0.86, to: (0, 2), on: .a, crossBy: -0.14),
                 routeInto("r2", .vertical, from: 0.68, to: (1, 2), on: .a, crossBy: -0.02),
@@ -174,13 +217,20 @@ nonisolated enum Puzzles {
             playName: "Twins Right — Quick Game",
             formation: twinsRight,
             solution: [
-                "...S.",
-                "C....",
-                "..L..",
+                "...C.",
+                "L....",
+                "..C..",
                 "....L",
-                ".C...",
+                ".S...",
             ],
-            startRevealed: [(0, 3), (1, 0), (2, 2)],
+            zones: [
+                "BAAAA",
+                "BBAAC",
+                "BBCCC",
+                "EBECD",
+                "EEEDD",
+            ],
+            startRevealed: [],
             routes: [
                 routeInto("r1", .crossing, from: 0.09, to: (0, 0), on: .a, crossBy: 0.04),
                 routeInto("r2", .vertical, from: 0.10, to: (1, 0), on: .a, crossBy: 0.03),
@@ -194,13 +244,20 @@ nonisolated enum Puzzles {
             playName: "Empty Left — Scramble Drill",
             formation: emptySpread,
             solution: [
-                ".C...",
-                "...S.",
                 "L....",
-                "....L",
-                "..C..",
+                "..S..",
+                "....C",
+                ".C...",
+                "...L.",
             ],
-            startRevealed: [(0, 1), (1, 3), (3, 4)],
+            zones: [
+                "AAABC",
+                "ABBBC",
+                "ABCCC",
+                "DDDDC",
+                "DDEEE",
+            ],
+            startRevealed: [],
             routes: [
                 routeInto("r1", .vertical, from: 0.09, to: (0, 1), on: .a, crossBy: 0.12),
                 routeInto("r2", .vertical, from: 0.95, to: (0, 3), on: .a, crossBy: -0.06),
@@ -216,13 +273,20 @@ nonisolated enum Puzzles {
             playName: "Spread Empty — Mesh Point",
             formation: spreadFive,
             solution: [
-                "..S..",
-                "C....",
+                "L....",
                 "...L.",
-                ".L...",
+                ".C...",
                 "....C",
+                "..S..",
             ],
-            startRevealed: [(0, 2), (2, 3)],
+            zones: [
+                "AAABB",
+                "ACABB",
+                "ACEBB",
+                "CCEDD",
+                "CEEED",
+            ],
+            startRevealed: [],
             routes: [
                 routeInto("r1", .crossing, from: 0.90, to: (0, 3), on: .c, crossBy: -0.20),
                 routeInto("r2", .crossing, from: 0.68, to: (1, 3), on: .c, crossBy: -0.08),
@@ -236,13 +300,20 @@ nonisolated enum Puzzles {
             playName: "Tight Y — Option Route",
             formation: tightSlot,
             solution: [
-                "...C.",
-                ".S...",
-                "....L",
-                "..L..",
+                "...S.",
                 "C....",
+                "..L..",
+                "....C",
+                ".L...",
             ],
-            startRevealed: [(0, 3), (3, 2)],
+            zones: [
+                "BBAAA",
+                "BAACA",
+                "BCCCD",
+                "BBCDD",
+                "EEEED",
+            ],
+            startRevealed: [],
             routes: [
                 routeInto("r1", .crossing, from: 0.32, to: (0, 1), on: .c, crossBy: 0.08),
                 routeInto("r2", .vertical, from: 0.50, to: (1, 1), on: .c, crossBy: 0.02),
@@ -256,13 +327,20 @@ nonisolated enum Puzzles {
             playName: "Twins — Dagger",
             formation: twinsRight,
             solution: [
-                "..S..",
-                "C....",
-                "...L.",
+                "...S.",
                 ".L...",
-                "....C",
+                "....L",
+                "C....",
+                "..C..",
             ],
-            startRevealed: [(0, 2), (2, 3)],
+            zones: [
+                "AAAAA",
+                "BBBAC",
+                "DDBBC",
+                "DDEEC",
+                "EEECC",
+            ],
+            startRevealed: [],
             routes: [
                 routeInto("r1", .crossing, from: 0.09, to: (0, 0), on: .c, crossBy: 0.04),
                 routeInto("r2", .vertical, from: 0.10, to: (1, 0), on: .c, crossBy: 0.02),
@@ -276,13 +354,20 @@ nonisolated enum Puzzles {
             playName: "Trips Left — Flood",
             formation: tripsLeft,
             solution: [
-                ".S...",
-                "...C.",
+                "...S.",
                 "L....",
-                "....L",
                 "..C..",
+                "....L",
+                ".C...",
             ],
-            startRevealed: [(0, 1), (3, 4)],
+            zones: [
+                "BAAAA",
+                "BBBAA",
+                "BBCCC",
+                "ECCDD",
+                "EEEDD",
+            ],
+            startRevealed: [],
             routes: [
                 routeInto("r1", .crossing, from: 0.18, to: (0, 1), on: .c, crossBy: 0.08),
                 routeInto("r2", .crossing, from: 0.90, to: (1, 1), on: .c, crossBy: -0.24),
@@ -296,13 +381,20 @@ nonisolated enum Puzzles {
             playName: "Spread — Double Crossers",
             formation: spreadFour,
             solution: [
-                "..C..",
                 "S....",
-                "...L.",
+                "...C.",
                 ".L...",
-                "....C",
+                "....L",
+                "..C..",
             ],
-            startRevealed: [(0, 2), (2, 3)],
+            zones: [
+                "AAAAB",
+                "ACCBB",
+                "ACCBD",
+                "ECEBD",
+                "EEEED",
+            ],
+            startRevealed: [],
             routes: [
                 routeInto("r1", .crossing, from: 0.20, to: (0, 1), on: .c, crossBy: 0.08),
                 routeInto("r2", .crossing, from: 0.90, to: (1, 1), on: .c, crossBy: -0.24),
@@ -316,13 +408,20 @@ nonisolated enum Puzzles {
             playName: "Bunch Left — Smash",
             formation: bunchLeft,
             solution: [
-                "..S..",
+                "...C.",
+                "S....",
+                "..L..",
                 "....C",
                 ".L...",
-                "...L.",
-                "C....",
             ],
-            startRevealed: [(0, 2), (2, 1)],
+            zones: [
+                "BBBAA",
+                "BAAAD",
+                "BCCAD",
+                "BECDD",
+                "EECDD",
+            ],
+            startRevealed: [],
             routes: [
                 routeInto("r1", .crossing, from: 0.16, to: (0, 1), on: .c, crossBy: 0.06),
                 routeInto("r2", .vertical, from: 0.08, to: (1, 0), on: .c, crossBy: 0.02),
@@ -336,13 +435,20 @@ nonisolated enum Puzzles {
             playName: "Championship — All Out",
             formation: championship,
             solution: [
-                "....S",
-                ".C...",
-                "...L.",
-                "L....",
-                "..C..",
+                "C....",
+                "...S.",
+                ".L...",
+                "....C",
+                "..L..",
             ],
-            startRevealed: [(0, 4), (1, 1)],
+            zones: [
+                "AAAAB",
+                "ACBBB",
+                "ACEBB",
+                "CCEDD",
+                "CCEED",
+            ],
+            startRevealed: [],
             routes: [
                 routeInto("r1", .crossing, from: 0.15, to: (0, 1), on: .c, crossBy: 0.06),
                 routeInto("r2", .crossing, from: 0.72, to: (1, 1), on: .c, crossBy: -0.14),
@@ -363,6 +469,7 @@ nonisolated enum Puzzles {
         playName: String,
         formation: [OffensiveMarker],
         solution: [String],
+        zones: [String],
         startRevealed: [(Int, Int)] = [],
         routes: [OffensiveRoute]
     ) -> PuzzleDefinition {
@@ -381,6 +488,15 @@ nonisolated enum Puzzles {
                 if let kind = kindID(character) {
                     solutionCells[PuzzleEngine.cellId(row: row, column: column)] = kind
                 }
+            }
+        }
+
+        var zoneOfCells: [String: Int] = [:]
+        for (row, line) in zones.enumerated() {
+            for (column, character) in line.enumerated() {
+                guard let scalar = character.unicodeScalars.first,
+                      scalar.value >= 65, scalar.value < 65 + UInt32(gridSide(solution)) else { continue }
+                zoneOfCells[PuzzleEngine.cellId(row: row, column: column)] = Int(scalar.value - 65)
             }
         }
 
@@ -406,10 +522,13 @@ nonisolated enum Puzzles {
             ),
             gridSize: solution.count,
             solution: solutionCells,
+            zoneOf: zoneOfCells,
             startingRevealed: revealed,
             hintCost: 25
         )
     }
+
+    private static func gridSide(_ rows: [String]) -> Int { rows.first?.count ?? 5 }
 
     // MARK: - Route helper
 

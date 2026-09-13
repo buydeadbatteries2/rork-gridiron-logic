@@ -34,4 +34,28 @@ nonisolated extension View {
     func shaking<Value: Equatable>(on trigger: Value) -> some View {
         modifier(Shaker(trigger: trigger))
     }
+
+    /// Horizontal shake for a blown assignment: fires only on the cell that
+    /// is being undone, whenever a new blown-assignment token arrives.
+    func blownShake(isActive: Bool, token: Int) -> some View {
+        modifier(BlownShakeModifier(isActive: isActive, token: token))
+    }
+}
+
+/// Container for the blown-assignment shake.
+struct BlownShakeModifier: ViewModifier {
+    let isActive: Bool
+    let token: Int
+    @State private var animationValue: CGFloat = 0
+
+    func body(content: Content) -> some View {
+        content
+            .modifier(ShakeEffect(travel: 6, shakes: 3, animatableData: animationValue))
+            .onChange(of: token) { _, _ in
+                guard isActive else { return }
+                withAnimation(.easeInOut(duration: 0.55)) {
+                    animationValue += 1
+                }
+            }
+    }
 }
